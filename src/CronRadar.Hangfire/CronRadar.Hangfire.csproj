@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>netstandard2.0;net6.0;net7.0;net8.0;net9.0</TargetFrameworks>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+
+    <!-- Package Information -->
+    <PackageId>CronRadar.Hangfire</PackageId>
+    <Version>0.0.1</Version>
+    <Authors>CronRadar</Authors>
+    <Company>CronRadar</Company>
+    <Product>CronRadar Hangfire Extension</Product>
+    <Description>Hangfire extension for CronRadar. Monitor all Hangfire jobs with one line: UseCronRadar()</Description>
+    <Copyright>Copyright © CronRadar 2025</Copyright>
+    <PackageProjectUrl>https://github.com/cronradar/cronradar-hangfire</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/cronradar/cronradar-hangfire</RepositoryUrl>
+    <PackageTags>cronradar;hangfire;monitoring;background-jobs;scheduler</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+
+    <!-- Build Configuration -->
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Depends on base CronRadar SDK -->
+    <PackageReference Include="CronRadar" Version="0.0.1" />
+
+    <!-- Hangfire dependency (peer dependency - user should have this already) -->
+    <PackageReference Include="Hangfire.Core" Version="1.7.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+</Project>
