@@ -7,16 +7,25 @@
 
     <!-- Package Information -->
     <PackageId>CronRadar.Hangfire</PackageId>
-    <Version>0.0.2</Version>
+    <Version>0.0.3</Version>
     <Authors>CronRadar</Authors>
     <Company>CronRadar</Company>
     <Product>CronRadar Hangfire Extension</Product>
-    <Description>Hangfire extension for CronRadar. Monitor all Hangfire jobs with one line: UseCronRadar()</Description>
+    <Description>Automatic monitoring for Hangfire background jobs. Track job execution, detect failures, and get alerts with zero configuration. Simply add UseCronRadar() to your Hangfire setup.</Description>
     <Copyright>Copyright © CronRadar 2025</Copyright>
-    <PackageProjectUrl>https://github.com/cronradar/cronradar-hangfire</PackageProjectUrl>
-    <RepositoryUrl>https://github.com/cronradar/cronradar-hangfire</RepositoryUrl>
-    <PackageTags>cronradar;hangfire;monitoring;background-jobs;scheduler</PackageTags>
+    <PackageProjectUrl>https://cronradar.com</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/cronradar/cronradar</RepositoryUrl>
+    <PackageTags>cronradar;hangfire;monitoring;background-jobs;scheduler;cron;job-monitoring;alerts;devops</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReleaseNotes>Version 0.0.3:
+- Improved monitor key generation (clean kebab-case format)
+- Removed dependency on application ID configuration
+- Application ID now extracted from API key automatically
+- Added sync API for declaring jobs upfront
+- Simplified integration - truly one line setup
+- Better handling of job naming conventions</PackageReleaseNotes>
+    <RepositoryType>git</RepositoryType>
 
     <!-- Build Configuration -->
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
@@ -30,6 +39,9 @@
 
     <!-- Hangfire dependency (peer dependency - user should have this already) -->
     <PackageReference Include="Hangfire.Core" Version="1.7.0" />
+
+    <!-- For JSON serialization support -->
+    <PackageReference Include="System.Text.Json" Version="4.7.2" Condition="'$(TargetFramework)' == 'netstandard2.0'" />
   </ItemGroup>
 
   <ItemGroup>
