@@ -1,6 +1,7 @@
 using Hangfire;
 using Hangfire.Common;
 using Hangfire.Server;
+using Hangfire.Storage;
 
 namespace CronRadar.Hangfire
 {
@@ -11,13 +12,27 @@ namespace CronRadar.Hangfire
     {
         /// <summary>
         /// Enables CronRadar monitoring for all Hangfire jobs automatically.
-        /// Jobs are monitored using clean kebab-case keys.
+        /// Jobs are monitored using their actual recurring job IDs.
+        /// Auto-syncs recurring jobs at startup by default.
         /// </summary>
         /// <param name="configuration">Hangfire global configuration</param>
         /// <param name="apiKey">Optional API key (defaults to CRONRADAR_API_KEY env var)</param>
-        public static IGlobalConfiguration UseCronRadar(this IGlobalConfiguration configuration, string apiKey = null)
+        /// <param name="autoSync">Whether to auto-sync recurring jobs at startup (default: true)</param>
+        public static IGlobalConfiguration UseCronRadar(this IGlobalConfiguration configuration, string apiKey = null, bool autoSync = true)
         {
             GlobalJobFilters.Filters.Add(new GlobalCronRadarFilter(apiKey));
+
+            // Auto-sync recurring jobs at startup
+            if (autoSync)
+            {
+                System.Threading.Tasks.Task.Run(async () =>
+                {
+                    // Wait for Hangfire to initialize
+                    await System.Threading.Tasks.Task.Delay(5000);
+                    await CronRadarSync.SyncRecurringJobsAsync(apiKey, removeStale: true);
+                });
+            }
+
             return configuration;
         }
 
@@ -43,34 +58,37 @@ namespace CronRadar.Hangfire
                 if (context?.Exception != null || context.Canceled)
                     return;
 
-                if (context.BackgroundJob?.Job == null)
+                if (context.BackgroundJob?.Id == null)
                     return;
 
-                // Generate a clean monitor key from job type and method
-                // Convert to kebab-case for cleaner keys
-                var jobType = context.BackgroundJob.Job.Type.Name
-                    .Replace("BackgroundJobs", "")
-                    .Replace("Jobs", "")
-                    .Replace("Job", "");
-                var method = context.BackgroundJob.Job.Method.Name;
-                var monitorKey = ToKebabCase($"{jobType}-{method}");
+                // Try to get the recurring job ID from Hangfire storage
+                string monitorKey = null;
 
-                // Ping CronRadar with the API key from configuration or env var
-                CronRadarClient.Ping(monitorKey, _apiKey);
-            }
+                try
+                {
+                    using (var connection = JobStorage.Current.GetConnection())
+                    {
+                        // Check if this job was triggered by a recurring job
+                        var recurringJobId = connection.GetJobParameter(
+                            context.BackgroundJob.Id, "RecurringJobId");
 
+                        if (!string.IsNullOrEmpty(recurringJobId))
+                        {
+                            monitorKey = recurringJobId; // Use the actual recurring job ID
+                        }
+                    }
+                }
+                catch
+                {
+                    // If we can't get the recurring job ID, don't ping
+                    // This prevents non-recurring jobs from creating monitors
+                }
 
-            private string ToKebabCase(string input)
-            {
-                if (string.IsNullOrEmpty(input))
-                    return input;
-
-                // Simple kebab case conversion
-                return System.Text.RegularExpressions.Regex
-                    .Replace(input, "([a-z])([A-Z])", "$1-$2")
-                    .ToLowerInvariant()
-                    .Replace("_", "-")
-                    .Replace("--", "-");
+                // Only ping if we have a valid recurring job ID
+                if (!string.IsNullOrEmpty(monitorKey))
+                {
+                    CronRadarClient.Ping(monitorKey, _apiKey);
+                }
             }
         }
     }
