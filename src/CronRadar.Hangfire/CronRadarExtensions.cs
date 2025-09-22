@@ -10,8 +10,8 @@ namespace CronRadar.Hangfire
     public static class CronRadarExtensions
     {
         /// <summary>
-        /// Enables CronRadar monitoring for all Hangfire jobs using a simple naming convention.
-        /// Jobs are monitored using their Type.Method as the monitor key.
+        /// Enables CronRadar monitoring for all Hangfire jobs automatically.
+        /// Jobs are monitored using clean kebab-case keys.
         /// </summary>
         /// <param name="configuration">Hangfire global configuration</param>
         /// <param name="apiKey">Optional API key (defaults to CRONRADAR_API_KEY env var)</param>
@@ -46,13 +46,31 @@ namespace CronRadar.Hangfire
                 if (context.BackgroundJob?.Job == null)
                     return;
 
-                // Use job type and method name as monitor key
-                var jobType = context.BackgroundJob.Job.Type.Name;
+                // Generate a clean monitor key from job type and method
+                // Convert to kebab-case for cleaner keys
+                var jobType = context.BackgroundJob.Job.Type.Name
+                    .Replace("BackgroundJobs", "")
+                    .Replace("Jobs", "")
+                    .Replace("Job", "");
                 var method = context.BackgroundJob.Job.Method.Name;
-                var monitorKey = $"{jobType}.{method}";
+                var monitorKey = ToKebabCase($"{jobType}-{method}");
 
                 // Ping CronRadar with the API key from configuration or env var
                 CronRadarClient.Ping(monitorKey, _apiKey);
+            }
+
+
+            private string ToKebabCase(string input)
+            {
+                if (string.IsNullOrEmpty(input))
+                    return input;
+
+                // Simple kebab case conversion
+                return System.Text.RegularExpressions.Regex
+                    .Replace(input, "([a-z])([A-Z])", "$1-$2")
+                    .ToLowerInvariant()
+                    .Replace("_", "-")
+                    .Replace("--", "-");
             }
         }
     }

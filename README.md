@@ -1,6 +1,6 @@
 # CronRadar.Hangfire
 
-Monitor all your Hangfire jobs with one line of code.
+Automatically monitors ALL your Hangfire jobs. Get alerts when jobs fail or don't run on schedule.
 
 ## Installation
 
@@ -8,49 +8,45 @@ Monitor all your Hangfire jobs with one line of code.
 dotnet add package CronRadar.Hangfire
 ```
 
-## Quick Start
+## Setup
 
-### Monitor All Jobs
+Add one line to your Hangfire configuration:
 
 ```csharp
 services.AddHangfire(configuration => configuration
     .UsePostgreSqlStorage(connectionString)
-    .UseCronRadar()); // That's it!
+    .UseCronRadar()); // Monitors ALL jobs automatically
 ```
 
-### Monitor Specific Jobs
-
-```csharp
-[CronRadar("daily-report")]
-public void GenerateDailyReport()
-{
-    // Your job logic
-}
-```
+That's it. Every Hangfire job now pings CronRadar on successful completion.
 
 ## Configuration
 
-You can set the following  API key via environment variable:
+Set your API key:
 ```bash
 export CRONRADAR_API_KEY=ck_app_xxxxx_yyyyy
 ```
 
-Or pass it directly:
-```csharp
-.UseCronRadar(Configuration["CronRadar:ApiKey"])
-```
-
 ## How It Works
 
-1. **Global Monitoring**: When you use `.UseCronRadar()`, all Hangfire jobs automatically ping CronRadar on successful completion
-2. **Monitor Keys**: Jobs are identified by `ClassName.MethodName` (e.g., `EmailJobs.SendDailyDigest`)
-3. **Attribute-Based**: Use `[CronRadar("custom-key")]` for custom monitor keys
-4. **Zero Config**: No additional setup required beyond adding the extension
+- **Automatic**: All jobs are monitored - no need to modify your job code
+- **Smart Keys**: Jobs get clean monitor keys like `email-send-digest` (from `EmailJobs.SendDigest`)
+- **Zero Config**: Just works with your existing Hangfire setup
+
+## Custom Keys (Optional)
+
+Want a specific monitor key? Use the attribute:
+
+```csharp
+[CronRadar("critical-backup")]
+public void BackupDatabase() { }
+```
 
 ## Requirements
 
-- .NET 6.0+ or .NET Standard 2.0+
 - Hangfire 1.7.0+
-- CronRadar base SDK 0.0.1+
+- .NET 6.0+ or .NET Standard 2.0+
+
+## License
 
 Proprietary - © 2025 CronRadar. All rights reserved.
