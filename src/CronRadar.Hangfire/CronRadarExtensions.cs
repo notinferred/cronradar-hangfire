@@ -13,9 +13,11 @@ namespace CronRadar.Hangfire
         /// Enables CronRadar monitoring for all Hangfire jobs using a simple naming convention.
         /// Jobs are monitored using their Type.Method as the monitor key.
         /// </summary>
-        public static IGlobalConfiguration UseCronRadar(this IGlobalConfiguration configuration)
+        /// <param name="configuration">Hangfire global configuration</param>
+        /// <param name="apiKey">Optional API key (defaults to CRONRADAR_API_KEY env var)</param>
+        public static IGlobalConfiguration UseCronRadar(this IGlobalConfiguration configuration, string apiKey = null)
         {
-            GlobalJobFilters.Filters.Add(new GlobalCronRadarFilter());
+            GlobalJobFilters.Filters.Add(new GlobalCronRadarFilter(apiKey));
             return configuration;
         }
 
@@ -24,6 +26,13 @@ namespace CronRadar.Hangfire
         /// </summary>
         private class GlobalCronRadarFilter : JobFilterAttribute, IServerFilter
         {
+            private readonly string _apiKey;
+
+            public GlobalCronRadarFilter(string apiKey = null)
+            {
+                _apiKey = apiKey;
+            }
+
             public void OnPerforming(PerformingContext context)
             {
                 // Not needed
@@ -42,8 +51,8 @@ namespace CronRadar.Hangfire
                 var method = context.BackgroundJob.Job.Method.Name;
                 var monitorKey = $"{jobType}.{method}";
 
-                // Ping CronRadar with the generated monitor key
-                global::CronRadar.CronRadar.Ping(monitorKey);
+                // Ping CronRadar with the API key from configuration or env var
+                CronRadarClient.Ping(monitorKey, _apiKey);
             }
         }
     }
