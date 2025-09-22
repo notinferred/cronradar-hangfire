@@ -10,32 +10,34 @@ dotnet add package CronRadar.Hangfire
 
 ## Quick Start
 
-### Option 1: Monitor ALL Jobs (Recommended)
+### Monitor All Jobs
 
 ```csharp
-// In Startup.cs or Program.cs
 services.AddHangfire(configuration => configuration
     .UsePostgreSqlStorage(connectionString)
-    .UseCronRadar()); // ← That's it! All jobs are now monitored
+    .UseCronRadar()); // That's it!
 ```
 
-### Option 2: Monitor Specific Jobs
+### Monitor Specific Jobs
 
 ```csharp
-public class EmailJobs
+[CronRadar("daily-report")]
+public void GenerateDailyReport()
 {
-    [CronRadar("send-daily-digest")]
-    public void SendDailyDigest()
-    {
-        // Your job logic here
-    }
+    // Your job logic
 }
+```
 
-// Register normally
-RecurringJob.AddOrUpdate<EmailJobs>(
-    x => x.SendDailyDigest(),
-    Cron.Daily
-);
+## Configuration
+
+You can set the following  API key via environment variable:
+```bash
+export CRONRADAR_API_KEY=ck_app_xxxxx_yyyyy
+```
+
+Or pass it directly:
+```csharp
+.UseCronRadar(Configuration["CronRadar:ApiKey"])
 ```
 
 ## How It Works
@@ -44,14 +46,6 @@ RecurringJob.AddOrUpdate<EmailJobs>(
 2. **Monitor Keys**: Jobs are identified by `ClassName.MethodName` (e.g., `EmailJobs.SendDailyDigest`)
 3. **Attribute-Based**: Use `[CronRadar("custom-key")]` for custom monitor keys
 4. **Zero Config**: No additional setup required beyond adding the extension
-
-## Configuration
-
-Set your CronRadar API key:
-
-```bash
-export CRONRADAR_API_KEY=ck_app_xxxxx_yyyyy
-```
 
 ## Requirements
 
