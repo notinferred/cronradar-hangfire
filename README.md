@@ -27,11 +27,6 @@ Set your API key:
 export CRONRADAR_API_KEY=ck_app_xxxxx_yyyyy
 ```
 
-## How It Works
-
-- **Automatic**: All jobs are monitored - no need to modify your job code
-- **Smart Keys**: Jobs get clean monitor keys like `email-send-digest` (from `EmailJobs.SendDigest`)
-- **Zero Config**: Just works with your existing Hangfire setup
 
 ## Custom Keys (Optional)
 

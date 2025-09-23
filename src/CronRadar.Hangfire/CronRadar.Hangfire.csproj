@@ -7,7 +7,7 @@
 
     <!-- Package Information -->
     <PackageId>CronRadar.Hangfire</PackageId>
-    <Version>0.0.4</Version>
+    <Version>0.0.6</Version>
     <Authors>CronRadar</Authors>
     <Company>CronRadar</Company>
     <Product>CronRadar Hangfire Extension</Product>
@@ -18,13 +18,7 @@
     <PackageTags>cronradar;hangfire;monitoring;background-jobs;scheduler;cron;job-monitoring;alerts;devops</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <PackageReleaseNotes>Version 0.0.4:
-- FIXED: Auto-discovery now actually works! GetRecurringJobMonitors() properly queries Hangfire storage
-- FIXED: Monitor keys now use actual recurring job IDs (no more incorrect prefixes)
-- FIXED: Only monitors recurring jobs, ignores one-off jobs
-- ADDED: Auto-sync by default when using UseCronRadar()
-- IMPROVED: Generates readable names from job IDs
-- The extension now truly "just works" with zero configuration!</PackageReleaseNotes>
+    <PackageReleaseNotes>Automatic monitoring for all Hangfire jobs. Just add UseCronRadar() to your configuration.</PackageReleaseNotes>
     <RepositoryType>git</RepositoryType>
 
     <!-- Build Configuration -->
@@ -39,6 +33,9 @@
 
     <!-- Hangfire dependency (peer dependency - user should have this already) -->
     <PackageReference Include="Hangfire.Core" Version="1.7.0" />
+
+    <!-- For dependency injection support -->
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="2.1.0" />
 
     <!-- For JSON serialization support -->
     <PackageReference Include="System.Text.Json" Version="4.7.2" Condition="'$(TargetFramework)' == 'netstandard2.0'" />
