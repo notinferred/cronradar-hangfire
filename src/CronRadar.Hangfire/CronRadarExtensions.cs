@@ -48,10 +48,9 @@ namespace CronRadar.Hangfire
                 // Add filter for syncing monitors when jobs are created
                 GlobalJobFilters.Filters.Add(new CronRadarCreationFilter(effectiveApiKey));
 
-                // Sync all existing recurring jobs immediately and start watcher
-                Task.Run(async () =>
+                // Sync all existing recurring jobs
+                Task.Run(() =>
                 {
-                    await Task.Delay(1000); // Brief delay to ensure Hangfire is initialized
                     SyncAllExistingJobs(effectiveApiKey);
 
                     // Start background watcher for new jobs
