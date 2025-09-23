@@ -48,41 +48,17 @@ namespace CronRadar.Hangfire
                 // Add filter for syncing monitors when jobs are created
                 GlobalJobFilters.Filters.Add(new CronRadarCreationFilter(effectiveApiKey));
 
-                // Sync all existing recurring jobs
+                // Start background watcher to discover and sync jobs
+                // Non-invasive: discovers jobs as they appear without blocking
                 Task.Run(() =>
                 {
-                    SyncAllExistingJobs(effectiveApiKey);
-
-                    // Start background watcher for new jobs
                     var watcher = new CronRadarJobWatcher(effectiveApiKey);
-                    _ = Task.Run(() => watcher.WatchForJobs());
+                    watcher.WatchForJobs();
                 });
 
                 return configuration;
             }
         }
-
-        private static void SyncAllExistingJobs(string apiKey)
-        {
-            try
-            {
-                using (var connection = JobStorage.Current.GetConnection())
-                {
-                    var recurringJobs = connection.GetRecurringJobs();
-                    var monitorSync = new CronRadarMonitorSync(apiKey);
-
-                    foreach (var job in recurringJobs)
-                    {
-                        monitorSync.SyncSingleMonitor(job.Id, job.Cron);
-                    }
-                }
-            }
-            catch
-            {
-                // Ignore errors during initial sync
-            }
-        }
-
 
         /// <summary>
         /// Filter that syncs monitors when recurring jobs are created
@@ -211,6 +187,9 @@ namespace CronRadar.Hangfire
 
             public async Task WatchForJobs()
             {
+                // Initial delay to let application start properly
+                await Task.Delay(TimeSpan.FromSeconds(1));
+
                 while (true)
                 {
                     try
@@ -223,22 +202,26 @@ namespace CronRadar.Hangfire
                             {
                                 var normalizedId = CronRadarKeyNormalizer.Normalize(job.Id);
 
-                                // Only sync if we haven't synced this job before
+                                // Only sync if we haven't successfully synced this job before
                                 if (!_syncedJobs.Contains(normalizedId))
                                 {
-                                    _monitorSync.SyncSingleMonitor(job.Id, job.Cron);
-                                    _syncedJobs.Add(normalizedId);
+                                    // Only mark as synced if sync actually succeeds
+                                    if (_monitorSync.SyncSingleMonitor(job.Id, job.Cron))
+                                    {
+                                        _syncedJobs.Add(normalizedId);
+                                    }
+                                    // If sync fails, it will retry on next iteration
                                 }
                             }
                         }
                     }
                     catch
                     {
-                        // Ignore errors
+                        // Ignore errors and continue watching
                     }
 
-                    // Check again in 30 seconds
-                    await Task.Delay(TimeSpan.FromSeconds(30));
+                    // Check again in 10 seconds (faster discovery, still non-invasive)
+                    await Task.Delay(TimeSpan.FromSeconds(10));
                 }
             }
         }
