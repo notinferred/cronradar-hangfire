@@ -7,7 +7,7 @@
 
     <!-- Package Information -->
     <PackageId>CronRadar.Hangfire</PackageId>
-    <Version>0.0.6</Version>
+    <Version>0.0.7</Version>
     <Authors>CronRadar</Authors>
     <Company>CronRadar</Company>
     <Product>CronRadar Hangfire Extension</Product>
@@ -17,7 +17,7 @@
     <RepositoryUrl>https://github.com/cronradar/cronradar</RepositoryUrl>
     <PackageTags>cronradar;hangfire;monitoring;background-jobs;scheduler;cron;job-monitoring;alerts;devops</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
     <PackageReleaseNotes>Automatic monitoring for all Hangfire jobs. Just add UseCronRadar() to your configuration.</PackageReleaseNotes>
     <RepositoryType>git</RepositoryType>
 
