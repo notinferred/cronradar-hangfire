@@ -32,7 +32,19 @@ namespace CronRadar.Hangfire
             // Only ping on successful completion
             if (context?.Exception == null && !context.Canceled)
             {
-                CronRadarClient.Ping(_monitorKey, _apiKey);
+                // Store API key if provided for this specific monitor
+                if (!string.IsNullOrEmpty(_apiKey))
+                {
+                    var currentKey = System.Environment.GetEnvironmentVariable("CRONRADAR_API_KEY");
+                    System.Environment.SetEnvironmentVariable("CRONRADAR_API_KEY", _apiKey, System.EnvironmentVariableTarget.Process);
+                    CronRadar.Ping(_monitorKey);
+                    // Restore original key
+                    System.Environment.SetEnvironmentVariable("CRONRADAR_API_KEY", currentKey, System.EnvironmentVariableTarget.Process);
+                }
+                else
+                {
+                    CronRadar.Ping(_monitorKey);
+                }
             }
         }
     }

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Hangfire;
@@ -13,6 +14,7 @@ namespace CronRadar.Hangfire
 {
     /// <summary>
     /// Extension methods for simple CronRadar integration with Hangfire.
+    /// Uses base SDK for all monitoring operations.
     /// </summary>
     public static class CronRadarExtensions
     {
@@ -27,32 +29,29 @@ namespace CronRadar.Hangfire
         /// </summary>
         /// <param name="configuration">Hangfire global configuration</param>
         /// <param name="apiKey">Optional API key (defaults to CRONRADAR_API_KEY env var)</param>
-        public static IGlobalConfiguration UseCronRadar(this IGlobalConfiguration configuration, string apiKey = null)
+        public static IGlobalConfiguration UseCronRadar(this IGlobalConfiguration configuration, string? apiKey = null)
         {
             lock (_initLock)
             {
                 if (_initialized) return configuration;
                 _initialized = true;
 
-                // Store API key in environment for other components to use
+                // Store API key in environment for base SDK to use
                 if (!string.IsNullOrEmpty(apiKey))
                 {
                     Environment.SetEnvironmentVariable("CRONRADAR_API_KEY", apiKey, EnvironmentVariableTarget.Process);
                 }
 
-                var effectiveApiKey = apiKey ?? Environment.GetEnvironmentVariable("CRONRADAR_API_KEY");
-
                 // Add filter for monitoring job execution
-                GlobalJobFilters.Filters.Add(new GlobalCronRadarFilter(effectiveApiKey));
+                GlobalJobFilters.Filters.Add(new GlobalCronRadarFilter());
 
                 // Add filter for syncing monitors when jobs are created
-                GlobalJobFilters.Filters.Add(new CronRadarCreationFilter(effectiveApiKey));
+                GlobalJobFilters.Filters.Add(new CronRadarCreationFilter());
 
                 // Start background watcher to discover and sync jobs
-                // Non-invasive: discovers jobs as they appear without blocking
                 Task.Run(() =>
                 {
-                    var watcher = new CronRadarJobWatcher(effectiveApiKey);
+                    var watcher = new CronRadarJobWatcher();
                     watcher.WatchForJobs();
                 });
 
@@ -65,13 +64,6 @@ namespace CronRadar.Hangfire
         /// </summary>
         private class CronRadarCreationFilter : JobFilterAttribute, IClientFilter
         {
-            private readonly CronRadarMonitorSync _monitorSync;
-
-            public CronRadarCreationFilter(string apiKey = null)
-            {
-                _monitorSync = new CronRadarMonitorSync(apiKey);
-            }
-
             public void OnCreating(CreatingContext context)
             {
                 // Not needed
@@ -99,8 +91,14 @@ namespace CronRadar.Hangfire
                                 {
                                     if (CronRadarKeyNormalizer.Normalize(job.Id) == normalizedId)
                                     {
-                                        // Sync this monitor
-                                        _monitorSync.SyncSingleMonitor(job.Id, job.Cron);
+                                        // Use base SDK to sync monitor
+                                        var jobName = GenerateReadableName(job.Id);
+                                        CronRadar.SyncMonitor(
+                                            normalizedId,
+                                            job.Cron,
+                                            source: "hangfire",
+                                            name: jobName
+                                        );
                                         break;
                                     }
                                 }
@@ -109,7 +107,7 @@ namespace CronRadar.Hangfire
                     }
                     catch
                     {
-                                // Ignore errors during sync
+                        // Ignore errors during sync
                     }
                 }
             }
@@ -120,13 +118,6 @@ namespace CronRadar.Hangfire
         /// </summary>
         private class GlobalCronRadarFilter : JobFilterAttribute, IServerFilter
         {
-            private readonly string _apiKey;
-
-            public GlobalCronRadarFilter(string apiKey = null)
-            {
-                _apiKey = apiKey;
-            }
-
             public void OnPerforming(PerformingContext context)
             {
                 // Not needed
@@ -167,7 +158,8 @@ namespace CronRadar.Hangfire
                 // Only ping if we have a valid recurring job ID
                 if (!string.IsNullOrEmpty(monitorKey))
                 {
-                    CronRadarClient.Ping(monitorKey, _apiKey);
+                    // Use base SDK for ping
+                    CronRadar.Ping(monitorKey);
                 }
             }
         }
@@ -177,13 +169,7 @@ namespace CronRadar.Hangfire
         /// </summary>
         private class CronRadarJobWatcher
         {
-            private readonly CronRadarMonitorSync _monitorSync;
             private readonly HashSet<string> _syncedJobs = new HashSet<string>();
-
-            public CronRadarJobWatcher(string apiKey)
-            {
-                _monitorSync = new CronRadarMonitorSync(apiKey);
-            }
 
             public async Task WatchForJobs()
             {
@@ -205,12 +191,25 @@ namespace CronRadar.Hangfire
                                 // Only sync if we haven't successfully synced this job before
                                 if (!_syncedJobs.Contains(normalizedId))
                                 {
-                                    // Only mark as synced if sync actually succeeds
-                                    if (_monitorSync.SyncSingleMonitor(job.Id, job.Cron))
+                                    try
                                     {
+                                        // Use base SDK to sync monitor
+                                        var jobName = GenerateReadableName(job.Id);
+                                        CronRadar.SyncMonitor(
+                                            normalizedId,
+                                            job.Cron,
+                                            source: "hangfire",
+                                            name: jobName
+                                        );
+
                                         _syncedJobs.Add(normalizedId);
+                                        Console.WriteLine($"[CronRadar.Hangfire] Synced monitor: {normalizedId}");
                                     }
-                                    // If sync fails, it will retry on next iteration
+                                    catch (Exception ex)
+                                    {
+                                        Console.WriteLine($"[CronRadar.Hangfire] Failed to sync {normalizedId}: {ex.Message}");
+                                        // Don't add to synced list, will retry next iteration
+                                    }
                                 }
                             }
                         }
@@ -220,10 +219,26 @@ namespace CronRadar.Hangfire
                         // Ignore errors and continue watching
                     }
 
-                    // Check again in 10 seconds (faster discovery, still non-invasive)
+                    // Check again in 10 seconds
                     await Task.Delay(TimeSpan.FromSeconds(10));
                 }
             }
+        }
+
+        /// <summary>
+        /// Generate a human-readable name from a job ID
+        /// </summary>
+        private static string GenerateReadableName(string jobId)
+        {
+            if (string.IsNullOrEmpty(jobId))
+                return jobId;
+
+            // Convert kebab-case to title case
+            // "check-overdue-pings" -> "Check Overdue Pings"
+            return string.Join(" ", jobId.Split('-')
+                .Select(word => word.Length > 0
+                    ? char.ToUpper(word[0]) + word.Substring(1).ToLower()
+                    : word));
         }
     }
 }
