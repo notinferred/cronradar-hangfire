@@ -8,13 +8,14 @@
     <!-- Package Information -->
     <PackageId>CronRadar.Hangfire</PackageId>
     <Version>0.0.10</Version>
-    <Authors>CronRadar</Authors>
+    <Authors>Administrator</Authors>
     <Company>CronRadar</Company>
+    <PackageLicenseExpression>LicenseRef-Proprietary</PackageLicenseExpression>
     <Product>CronRadar Hangfire Extension</Product>
     <Description>Automatic monitoring for Hangfire background jobs. Track job execution, detect failures, and get alerts with zero configuration. Simply add UseCronRadar() to your Hangfire setup.</Description>
     <Copyright>Copyright © CronRadar 2025</Copyright>
     <PackageProjectUrl>https://cronradar.com</PackageProjectUrl>
-    <RepositoryUrl>https://github.com/cronradar/cronradar</RepositoryUrl>
+    <RepositoryUrl>https://github.com/cronradar/cronradar-hangfire</RepositoryUrl>
     <PackageTags>cronradar;hangfire;monitoring;background-jobs;scheduler;cron;job-monitoring;alerts;devops</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
