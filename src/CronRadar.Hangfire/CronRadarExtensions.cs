@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using Hangfire;
@@ -13,28 +14,50 @@ using Hangfire.Storage;
 namespace CronRadar.Hangfire
 {
     /// <summary>
-    /// Extension methods for simple CronRadar integration with Hangfire.
-    /// Uses base SDK for all monitoring operations.
+    /// Extension methods for CronRadar integration with Hangfire.
+    /// Supports two modes: Monitor (selective opt-in) and MonitorAll (opt-out).
     /// </summary>
     public static class CronRadarExtensions
     {
         private static bool _initialized = false;
         private static readonly object _initLock = new object();
+        private static bool _selectiveMode = true; // true = Monitor, false = MonitorAll
 
         /// <summary>
-        /// Enables CronRadar monitoring for all Hangfire jobs automatically.
-        /// Jobs are monitored using their actual recurring job IDs.
-        /// Monitors are synced automatically as jobs are registered.
-        /// Zero configuration required - just add this line!
+        /// Enables selective monitoring - only jobs with [Monitor] attribute are tracked.
         /// </summary>
         /// <param name="configuration">Hangfire global configuration</param>
         /// <param name="apiKey">Optional API key (defaults to CRONRADAR_API_KEY env var)</param>
-        public static IGlobalConfiguration UseCronRadar(this IGlobalConfiguration configuration, string? apiKey = null)
+        public static IGlobalConfiguration Monitor(this IGlobalConfiguration configuration, string? apiKey = null)
+        {
+            return InitializeMonitoring(configuration, apiKey, selectiveMode: true);
+        }
+
+        /// <summary>
+        /// Enables monitoring for all jobs - only jobs with [SkipMonitor] attribute are excluded.
+        /// </summary>
+        /// <param name="configuration">Hangfire global configuration</param>
+        /// <param name="apiKey">Optional API key (defaults to CRONRADAR_API_KEY env var)</param>
+        public static IGlobalConfiguration MonitorAll(this IGlobalConfiguration configuration, string? apiKey = null)
+        {
+            return InitializeMonitoring(configuration, apiKey, selectiveMode: false);
+        }
+
+        private static IGlobalConfiguration InitializeMonitoring(
+            IGlobalConfiguration configuration,
+            string? apiKey,
+            bool selectiveMode)
         {
             lock (_initLock)
             {
-                if (_initialized) return configuration;
+                if (_initialized)
+                {
+                    Console.WriteLine("[CronRadar.Hangfire] Already initialized. Ignoring duplicate call.");
+                    return configuration;
+                }
+
                 _initialized = true;
+                _selectiveMode = selectiveMode;
 
                 // Store API key in environment for base SDK to use
                 if (!string.IsNullOrEmpty(apiKey))
@@ -42,16 +65,19 @@ namespace CronRadar.Hangfire
                     Environment.SetEnvironmentVariable("CRONRADAR_API_KEY", apiKey, EnvironmentVariableTarget.Process);
                 }
 
+                var mode = selectiveMode ? "selective ([Monitor] opt-in)" : "monitorAll ([SkipMonitor] opt-out)";
+                Console.WriteLine($"[CronRadar.Hangfire] Initializing in {mode} mode");
+
                 // Add filter for monitoring job execution
-                GlobalJobFilters.Filters.Add(new GlobalCronRadarFilter());
+                GlobalJobFilters.Filters.Add(new CronRadarExecutionFilter(selectiveMode));
 
                 // Add filter for syncing monitors when jobs are created
-                GlobalJobFilters.Filters.Add(new CronRadarCreationFilter());
+                GlobalJobFilters.Filters.Add(new CronRadarRegistrationFilter(selectiveMode));
 
                 // Start background watcher to discover and sync jobs
                 Task.Run(() =>
                 {
-                    var watcher = new CronRadarJobWatcher();
+                    var watcher = new CronRadarJobWatcher(selectiveMode);
                     watcher.WatchForJobs();
                 });
 
@@ -60,10 +86,18 @@ namespace CronRadar.Hangfire
         }
 
         /// <summary>
-        /// Filter that syncs monitors when recurring jobs are created
+        /// Filter that syncs monitors when recurring jobs are created.
+        /// Checks for [Monitor] or [SkipMonitor] attributes based on mode.
         /// </summary>
-        private class CronRadarCreationFilter : JobFilterAttribute, IClientFilter
+        private class CronRadarRegistrationFilter : JobFilterAttribute, IClientFilter
         {
+            private readonly bool _selectiveMode;
+
+            public CronRadarRegistrationFilter(bool selectiveMode)
+            {
+                _selectiveMode = selectiveMode;
+            }
+
             public void OnCreating(CreatingContext context)
             {
                 // Not needed
@@ -72,52 +106,79 @@ namespace CronRadar.Hangfire
             public void OnCreated(CreatedContext context)
             {
                 // Check if this is a recurring job
-                if (context.BackgroundJob?.Id != null)
+                if (context.BackgroundJob?.Id == null) return;
+
+                try
                 {
-                    try
+                    using (var connection = JobStorage.Current.GetConnection())
                     {
-                        using (var connection = JobStorage.Current.GetConnection())
+                        var recurringJobId = connection.GetJobParameter(
+                            context.BackgroundJob.Id, "RecurringJobId");
+
+                        if (string.IsNullOrEmpty(recurringJobId)) return;
+
+                        // Get the recurring job details
+                        var recurringJobs = connection.GetRecurringJobs();
+                        var normalizedId = CronRadarKeyNormalizer.Normalize(recurringJobId);
+
+                        foreach (var job in recurringJobs)
                         {
-                            var recurringJobId = connection.GetJobParameter(
-                                context.BackgroundJob.Id, "RecurringJobId");
+                            if (CronRadarKeyNormalizer.Normalize(job.Id) != normalizedId) continue;
 
-                            if (!string.IsNullOrEmpty(recurringJobId))
-                            {
-                                // Get the recurring job details to find the cron expression
-                                var recurringJobs = connection.GetRecurringJobs();
-                                var normalizedId = CronRadarKeyNormalizer.Normalize(recurringJobId);
+                            // Check if job should be monitored based on attributes
+                            var method = context.BackgroundJob.Job?.Method;
+                            if (method == null) continue;
 
-                                foreach (var job in recurringJobs)
-                                {
-                                    if (CronRadarKeyNormalizer.Normalize(job.Id) == normalizedId)
-                                    {
-                                        // Use base SDK to sync monitor
-                                        var jobName = GenerateReadableName(job.Id);
-                                        CronRadar.SyncMonitor(
-                                            normalizedId,
-                                            job.Cron,
-                                            source: "hangfire",
-                                            name: jobName
-                                        );
-                                        break;
-                                    }
-                                }
-                            }
+                            if (!ShouldMonitorJob(method)) continue;
+
+                            // Use base SDK's Sync() to pre-register
+                            var jobName = GenerateReadableName(job.Id);
+                            CronRadar.Sync(
+                                normalizedId,
+                                job.Cron,
+                                source: "hangfire",
+                                name: jobName
+                            );
+                            Console.WriteLine($"[CronRadar.Hangfire] Registered monitor: {normalizedId}");
+                            break;
                         }
                     }
-                    catch
-                    {
-                        // Ignore errors during sync
-                    }
+                }
+                catch (Exception ex)
+                {
+                    // Ignore errors during sync - never break user's job registration
+                    Console.WriteLine($"[CronRadar.Hangfire] Registration sync error: {ex.Message}");
+                }
+            }
+
+            private bool ShouldMonitorJob(MethodInfo method)
+            {
+                if (_selectiveMode)
+                {
+                    // Selective: Only monitor if [Monitor] attribute present
+                    return method.GetCustomAttribute<MonitorAttribute>() != null;
+                }
+                else
+                {
+                    // MonitorAll: Monitor unless [SkipMonitor] attribute present
+                    return method.GetCustomAttribute<SkipMonitorAttribute>() == null;
                 }
             }
         }
 
         /// <summary>
-        /// Global filter that monitors all Hangfire jobs automatically.
+        /// Filter that monitors job execution.
+        /// Calls base SDK's Monitor() on successful completion.
         /// </summary>
-        private class GlobalCronRadarFilter : JobFilterAttribute, IServerFilter
+        private class CronRadarExecutionFilter : JobFilterAttribute, IServerFilter
         {
+            private readonly bool _selectiveMode;
+
+            public CronRadarExecutionFilter(bool selectiveMode)
+            {
+                _selectiveMode = selectiveMode;
+            }
+
             public void OnPerforming(PerformingContext context)
             {
                 // Not needed
@@ -125,56 +186,72 @@ namespace CronRadar.Hangfire
 
             public void OnPerformed(PerformedContext context)
             {
-                if (context?.Exception != null || context.Canceled)
-                    return;
+                // Only monitor successful executions
+                if (context?.Exception != null || context.Canceled) return;
+                if (context.BackgroundJob?.Id == null) return;
 
-                if (context.BackgroundJob?.Id == null)
-                    return;
+                // Check if job should be monitored based on attributes
+                var method = context.BackgroundJob.Job?.Method;
+                if (method == null) return;
 
-                // Try to get the recurring job ID from Hangfire storage
-                string monitorKey = null;
+                if (!ShouldMonitorJob(method)) return;
 
                 try
                 {
                     using (var connection = JobStorage.Current.GetConnection())
                     {
-                        // Check if this job was triggered by a recurring job
+                        // Get the recurring job ID
                         var recurringJobId = connection.GetJobParameter(
                             context.BackgroundJob.Id, "RecurringJobId");
 
-                        if (!string.IsNullOrEmpty(recurringJobId))
-                        {
-                            // Normalize the job ID to handle quoted values from Hangfire
-                            monitorKey = CronRadarKeyNormalizer.Normalize(recurringJobId);
-                        }
+                        if (string.IsNullOrEmpty(recurringJobId)) return;
+
+                        var monitorKey = CronRadarKeyNormalizer.Normalize(recurringJobId);
+
+                        // Use base SDK's Monitor() to record execution
+                        CronRadar.Monitor(monitorKey);
                     }
                 }
-                catch
+                catch (Exception ex)
                 {
-                    // If we can't get the recurring job ID, don't ping
-                    // This prevents non-recurring jobs from creating monitors
+                    // Never break user's job
+                    Console.WriteLine($"[CronRadar.Hangfire] Monitor error: {ex.Message}");
                 }
+            }
 
-                // Only ping if we have a valid recurring job ID
-                if (!string.IsNullOrEmpty(monitorKey))
+            private bool ShouldMonitorJob(MethodInfo method)
+            {
+                if (_selectiveMode)
                 {
-                    // Use base SDK for ping
-                    CronRadar.Ping(monitorKey);
+                    // Selective: Only monitor if [Monitor] attribute present
+                    return method.GetCustomAttribute<MonitorAttribute>() != null;
+                }
+                else
+                {
+                    // MonitorAll: Monitor unless [SkipMonitor] attribute present
+                    return method.GetCustomAttribute<SkipMonitorAttribute>() == null;
                 }
             }
         }
 
         /// <summary>
-        /// Background task that watches for new recurring jobs and syncs them
+        /// Background task that watches for new recurring jobs and syncs them.
+        /// Filters based on [Monitor] or [SkipMonitor] attributes.
         /// </summary>
         private class CronRadarJobWatcher
         {
             private readonly HashSet<string> _syncedJobs = new HashSet<string>();
+            private readonly bool _selectiveMode;
+
+            public CronRadarJobWatcher(bool selectiveMode)
+            {
+                _selectiveMode = selectiveMode;
+            }
 
             public async Task WatchForJobs()
             {
                 // Initial delay to let application start properly
-                await Task.Delay(TimeSpan.FromSeconds(1));
+                await Task.Delay(TimeSpan.FromSeconds(2));
 
                 while (true)
                 {
@@ -188,39 +265,66 @@ namespace CronRadar.Hangfire
                             {
                                 var normalizedId = CronRadarKeyNormalizer.Normalize(job.Id);
 
-                                // Only sync if we haven't successfully synced this job before
-                                if (!_syncedJobs.Contains(normalizedId))
-                                {
-                                    try
-                                    {
-                                        // Use base SDK to sync monitor
-                                        var jobName = GenerateReadableName(job.Id);
-                                        CronRadar.SyncMonitor(
-                                            normalizedId,
-                                            job.Cron,
-                                            source: "hangfire",
-                                            name: jobName
-                                        );
+                                // Skip if already synced
+                                if (_syncedJobs.Contains(normalizedId)) continue;
 
-                                        _syncedJobs.Add(normalizedId);
-                                        Console.WriteLine($"[CronRadar.Hangfire] Synced monitor: {normalizedId}");
-                                    }
-                                    catch (Exception ex)
-                                    {
-                                        Console.WriteLine($"[CronRadar.Hangfire] Failed to sync {normalizedId}: {ex.Message}");
-                                        // Don't add to synced list, will retry next iteration
-                                    }
+                                try
+                                {
+                                    // Check if this job should be monitored
+                                    if (!ShouldMonitorJob(job)) continue;
+
+                                    // Use base SDK's Sync() to pre-register
+                                    var jobName = GenerateReadableName(job.Id);
+                                    CronRadar.Sync(
+                                        normalizedId,
+                                        job.Cron,
+                                        source: "hangfire",
+                                        name: jobName
+                                    );
+
+                                    _syncedJobs.Add(normalizedId);
+                                    Console.WriteLine($"[CronRadar.Hangfire] Synced monitor: {normalizedId}");
+                                }
+                                catch (Exception ex)
+                                {
+                                    Console.WriteLine($"[CronRadar.Hangfire] Failed to sync {normalizedId}: {ex.Message}");
+                                    // Don't add to synced list, will retry next iteration
                                 }
                             }
                         }
                     }
-                    catch
+                    catch (Exception ex)
                     {
-                        // Ignore errors and continue watching
+                        Console.WriteLine($"[CronRadar.Hangfire] Watcher error: {ex.Message}");
                     }
 
                     // Check again in 10 seconds
                     await Task.Delay(TimeSpan.FromSeconds(10));
+                }
+            }
+
+            private bool ShouldMonitorJob(RecurringJobDto job)
+            {
+                try
+                {
+                    // Get the job method to check for attributes
+                    if (job.Job?.Method == null) return !_selectiveMode; // If unknown, default based on mode
+
+                    if (_selectiveMode)
+                    {
+                        // Selective: Only monitor if [Monitor] attribute present
+                        return job.Job.Method.GetCustomAttribute<MonitorAttribute>() != null;
+                    }
+                    else
+                    {
+                        // MonitorAll: Monitor unless [SkipMonitor] attribute present
+                        return job.Job.Method.GetCustomAttribute<SkipMonitorAttribute>() == null;
+                    }
+                }
+                catch
+                {
+                    // If we can't determine, default based on mode
+                    return !_selectiveMode; // MonitorAll=true, Selective=false
                 }
             }
         }
