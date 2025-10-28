@@ -10,30 +10,9 @@ dotnet add package CronRadar.Hangfire
 
 [NuGet](https://nuget.org/packages/CronRadar.Hangfire)
 
-## Quick Start - Selective Mode
+## Quick Start
 
-Monitor specific jobs with `[Monitor]` attribute:
-
-```csharp
-services.AddHangfire(config =>
-    config.Monitor()
-);
-
-[Monitor]
-public void DailyBackup()
-{
-    // Backup logic
-}
-
-public void InternalTask()
-{
-    // Not monitored (no attribute)
-}
-```
-
-## Quick Start - Monitor All
-
-Monitor all jobs by default:
+Monitor all jobs by default - use `[SkipMonitor]` to opt-out:
 
 ```csharp
 services.AddHangfire(config =>
