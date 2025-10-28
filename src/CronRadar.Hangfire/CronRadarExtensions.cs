@@ -15,23 +15,12 @@ namespace CronRadar.Hangfire
 {
     /// <summary>
     /// Extension methods for CronRadar integration with Hangfire.
-    /// Supports two modes: Monitor (selective opt-in) and MonitorAll (opt-out).
+    /// Monitors all jobs by default - use [SkipMonitor] attribute to opt-out.
     /// </summary>
     public static class CronRadarExtensions
     {
         private static bool _initialized = false;
         private static readonly object _initLock = new object();
-        private static bool _selectiveMode = true; // true = Monitor, false = MonitorAll
-
-        /// <summary>
-        /// Enables selective monitoring - only jobs with [Monitor] attribute are tracked.
-        /// </summary>
-        /// <param name="configuration">Hangfire global configuration</param>
-        /// <param name="apiKey">Optional API key (defaults to CRONRADAR_API_KEY env var)</param>
-        public static IGlobalConfiguration Monitor(this IGlobalConfiguration configuration, string? apiKey = null)
-        {
-            return InitializeMonitoring(configuration, apiKey, selectiveMode: true);
-        }
 
         /// <summary>
         /// Enables monitoring for all jobs - only jobs with [SkipMonitor] attribute are excluded.
@@ -39,14 +28,6 @@ namespace CronRadar.Hangfire
         /// <param name="configuration">Hangfire global configuration</param>
         /// <param name="apiKey">Optional API key (defaults to CRONRADAR_API_KEY env var)</param>
         public static IGlobalConfiguration MonitorAll(this IGlobalConfiguration configuration, string? apiKey = null)
-        {
-            return InitializeMonitoring(configuration, apiKey, selectiveMode: false);
-        }
-
-        private static IGlobalConfiguration InitializeMonitoring(
-            IGlobalConfiguration configuration,
-            string? apiKey,
-            bool selectiveMode)
         {
             lock (_initLock)
             {
@@ -57,7 +38,6 @@ namespace CronRadar.Hangfire
                 }
 
                 _initialized = true;
-                _selectiveMode = selectiveMode;
 
                 // Store API key in environment for base SDK to use
                 if (!string.IsNullOrEmpty(apiKey))
@@ -65,19 +45,18 @@ namespace CronRadar.Hangfire
                     Environment.SetEnvironmentVariable("CRONRADAR_API_KEY", apiKey, EnvironmentVariableTarget.Process);
                 }
 
-                var mode = selectiveMode ? "selective ([Monitor] opt-in)" : "monitorAll ([SkipMonitor] opt-out)";
-                Console.WriteLine($"[CronRadar.Hangfire] Initializing in {mode} mode");
+                Console.WriteLine("[CronRadar.Hangfire] Initializing MonitorAll mode - use [SkipMonitor] to opt-out");
 
                 // Add filter for monitoring job execution
-                GlobalJobFilters.Filters.Add(new CronRadarExecutionFilter(selectiveMode));
+                GlobalJobFilters.Filters.Add(new CronRadarExecutionFilter());
 
                 // Add filter for syncing monitors when jobs are created
-                GlobalJobFilters.Filters.Add(new CronRadarRegistrationFilter(selectiveMode));
+                GlobalJobFilters.Filters.Add(new CronRadarRegistrationFilter());
 
                 // Start background watcher to discover and sync jobs
                 Task.Run(() =>
                 {
-                    var watcher = new CronRadarJobWatcher(selectiveMode);
+                    var watcher = new CronRadarJobWatcher();
                     watcher.WatchForJobs();
                 });
 
@@ -87,17 +66,10 @@ namespace CronRadar.Hangfire
 
         /// <summary>
         /// Filter that syncs monitors when recurring jobs are created.
-        /// Checks for [Monitor] or [SkipMonitor] attributes based on mode.
+        /// Monitors all jobs unless [SkipMonitor] attribute is present.
         /// </summary>
         private class CronRadarRegistrationFilter : JobFilterAttribute, IClientFilter
         {
-            private readonly bool _selectiveMode;
-
-            public CronRadarRegistrationFilter(bool selectiveMode)
-            {
-                _selectiveMode = selectiveMode;
-            }
-
             public void OnCreating(CreatingContext context)
             {
                 // Not needed
@@ -125,7 +97,7 @@ namespace CronRadar.Hangfire
                         {
                             if (CronRadarKeyNormalizer.Normalize(job.Id) != normalizedId) continue;
 
-                            // Check if job should be monitored based on attributes
+                            // Check if job should be monitored
                             var method = context.BackgroundJob.Job?.Method;
                             if (method == null) continue;
 
@@ -153,16 +125,8 @@ namespace CronRadar.Hangfire
 
             private bool ShouldMonitorJob(MethodInfo method)
             {
-                if (_selectiveMode)
-                {
-                    // Selective: Only monitor if [Monitor] attribute present
-                    return method.GetCustomAttribute<MonitorAttribute>() != null;
-                }
-                else
-                {
-                    // MonitorAll: Monitor unless [SkipMonitor] attribute present
-                    return method.GetCustomAttribute<SkipMonitorAttribute>() == null;
-                }
+                // Monitor all jobs unless [SkipMonitor] attribute is present
+                return method.GetCustomAttribute<SkipMonitorAttribute>() == null;
             }
         }
 
@@ -172,13 +136,6 @@ namespace CronRadar.Hangfire
         /// </summary>
         private class CronRadarExecutionFilter : JobFilterAttribute, IServerFilter
         {
-            private readonly bool _selectiveMode;
-
-            public CronRadarExecutionFilter(bool selectiveMode)
-            {
-                _selectiveMode = selectiveMode;
-            }
-
             public void OnPerforming(PerformingContext context)
             {
                 // Not needed
@@ -190,7 +147,7 @@ namespace CronRadar.Hangfire
                 if (context?.Exception != null || context.Canceled) return;
                 if (context.BackgroundJob?.Id == null) return;
 
-                // Check if job should be monitored based on attributes
+                // Check if job should be monitored
                 var method = context.BackgroundJob.Job?.Method;
                 if (method == null) return;
 
@@ -221,32 +178,18 @@ namespace CronRadar.Hangfire
 
             private bool ShouldMonitorJob(MethodInfo method)
             {
-                if (_selectiveMode)
-                {
-                    // Selective: Only monitor if [Monitor] attribute present
-                    return method.GetCustomAttribute<MonitorAttribute>() != null;
-                }
-                else
-                {
-                    // MonitorAll: Monitor unless [SkipMonitor] attribute present
-                    return method.GetCustomAttribute<SkipMonitorAttribute>() == null;
-                }
+                // Monitor all jobs unless [SkipMonitor] attribute is present
+                return method.GetCustomAttribute<SkipMonitorAttribute>() == null;
             }
         }
 
         /// <summary>
         /// Background task that watches for new recurring jobs and syncs them.
-        /// Filters based on [Monitor] or [SkipMonitor] attributes.
+        /// Monitors all jobs unless [SkipMonitor] attribute is present.
         /// </summary>
         private class CronRadarJobWatcher
         {
             private readonly HashSet<string> _syncedJobs = new HashSet<string>();
-            private readonly bool _selectiveMode;
-
-            public CronRadarJobWatcher(bool selectiveMode)
-            {
-                _selectiveMode = selectiveMode;
-            }
 
             public async Task WatchForJobs()
             {
@@ -308,23 +251,15 @@ namespace CronRadar.Hangfire
                 try
                 {
                     // Get the job method to check for attributes
-                    if (job.Job?.Method == null) return !_selectiveMode; // If unknown, default based on mode
+                    if (job.Job?.Method == null) return true; // If unknown, monitor by default
 
-                    if (_selectiveMode)
-                    {
-                        // Selective: Only monitor if [Monitor] attribute present
-                        return job.Job.Method.GetCustomAttribute<MonitorAttribute>() != null;
-                    }
-                    else
-                    {
-                        // MonitorAll: Monitor unless [SkipMonitor] attribute present
-                        return job.Job.Method.GetCustomAttribute<SkipMonitorAttribute>() == null;
-                    }
+                    // Monitor all jobs unless [SkipMonitor] attribute is present
+                    return job.Job.Method.GetCustomAttribute<SkipMonitorAttribute>() == null;
                 }
                 catch
                 {
-                    // If we can't determine, default based on mode
-                    return !_selectiveMode; // MonitorAll=true, Selective=false
+                    // If we can't determine, monitor by default
+                    return true;
                 }
             }
         }
