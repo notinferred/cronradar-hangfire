@@ -103,9 +103,9 @@ namespace CronRadar.Hangfire
 
                             if (!ShouldMonitorJob(method)) continue;
 
-                            // Use base SDK's Sync() to pre-register
+                            // Use base SDK's SyncMonitor() to pre-register
                             var jobName = GenerateReadableName(job.Id);
-                            CronRadar.Sync(
+                            CronRadar.SyncMonitor(
                                 normalizedId,
                                 job.Cron,
                                 source: "hangfire",
@@ -131,21 +131,15 @@ namespace CronRadar.Hangfire
         }
 
         /// <summary>
-        /// Filter that monitors job execution.
-        /// Calls base SDK's Monitor() on successful completion.
+        /// Filter that monitors job execution with lifecycle tracking.
+        /// Calls StartJob on start, CompleteJob on success.
         /// </summary>
         private class CronRadarExecutionFilter : JobFilterAttribute, IServerFilter
         {
             public void OnPerforming(PerformingContext context)
             {
-                // Not needed
-            }
-
-            public void OnPerformed(PerformedContext context)
-            {
-                // Only monitor successful executions
-                if (context?.Exception != null || context.Canceled) return;
-                if (context.BackgroundJob?.Id == null) return;
+                // Signal job start for lifecycle tracking
+                if (context?.BackgroundJob?.Id == null) return;
 
                 // Check if job should be monitored
                 var method = context.BackgroundJob.Job?.Method;
@@ -165,14 +159,57 @@ namespace CronRadar.Hangfire
 
                         var monitorKey = CronRadarKeyNormalizer.Normalize(recurringJobId);
 
-                        // Use base SDK's Monitor() to record execution
-                        CronRadar.Monitor(monitorKey);
+                        // Signal job start for lifecycle tracking
+                        CronRadar.StartJob(monitorKey);
                     }
                 }
                 catch (Exception ex)
                 {
                     // Never break user's job
-                    Console.WriteLine($"[CronRadar.Hangfire] Monitor error: {ex.Message}");
+                    Console.WriteLine($"[CronRadar.Hangfire] StartJob error: {ex.Message}");
+                }
+            }
+
+            public void OnPerformed(PerformedContext context)
+            {
+                if (context?.BackgroundJob?.Id == null) return;
+
+                // Check if job should be monitored
+                var method = context.BackgroundJob.Job?.Method;
+                if (method == null) return;
+
+                if (!ShouldMonitorJob(method)) return;
+
+                try
+                {
+                    using (var connection = JobStorage.Current.GetConnection())
+                    {
+                        // Get the recurring job ID
+                        var recurringJobId = connection.GetJobParameter(
+                            context.BackgroundJob.Id, "RecurringJobId");
+
+                        if (string.IsNullOrEmpty(recurringJobId)) return;
+
+                        var monitorKey = CronRadarKeyNormalizer.Normalize(recurringJobId);
+
+                        // Report success or failure
+                        if (context.Exception == null && !context.Canceled)
+                        {
+                            // Signal job completion for lifecycle tracking
+                            CronRadar.CompleteJob(monitorKey);
+                        }
+                        else
+                        {
+                            // Signal job failure for immediate alert
+                            var message = context.Exception?.Message ?? "Job was canceled";
+                            CronRadar.FailJob(monitorKey, message);
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    // Never break user's job
+                    Console.WriteLine($"[CronRadar.Hangfire] Lifecycle tracking error: {ex.Message}");
                 }
             }
 
@@ -216,9 +253,9 @@ namespace CronRadar.Hangfire
                                     // Check if this job should be monitored
                                     if (!ShouldMonitorJob(job)) continue;
 
-                                    // Use base SDK's Sync() to pre-register
+                                    // Use base SDK's SyncMonitor() to pre-register
                                     var jobName = GenerateReadableName(job.Id);
-                                    CronRadar.Sync(
+                                    CronRadar.SyncMonitor(
                                         normalizedId,
                                         job.Cron,
                                         source: "hangfire",
