@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Reflection;
 using Hangfire;
 using Hangfire.Common;
@@ -17,6 +18,7 @@ namespace CronRadar.Hangfire
         private static bool _initialized = false;
         private static readonly object _initLock = new object();
         private static string? _apiKey = null;
+        private static readonly ConcurrentDictionary<string, string?> _schedules = new();
 
         /// <summary>
         /// Enables monitoring for all jobs - only jobs with [SkipMonitor] attribute are excluded.
@@ -146,28 +148,27 @@ namespace CronRadar.Hangfire
 
             private string? GetJobSchedule(IStorageConnection connection, string recurringJobId)
             {
+                var key = CronRadarKeyNormalizer.Normalize(recurringJobId);
+
+                // O(1) cache hit
+                if (_schedules.TryGetValue(key, out var cached))
+                    return cached;
+
+                // Cache miss - populate entire cache (happens once per app lifetime)
                 try
                 {
-                    var recurringJobs = connection.GetRecurringJobs();
-                    var normalizedId = CronRadarKeyNormalizer.Normalize(recurringJobId);
-
-                    foreach (var job in recurringJobs)
+                    foreach (var job in connection.GetRecurringJobs())
                     {
-                        if (CronRadarKeyNormalizer.Normalize(job.Id) == normalizedId)
-                        {
-                            return job.Cron;
-                        }
+                        _schedules.TryAdd(CronRadarKeyNormalizer.Normalize(job.Id), job.Cron);
                     }
                 }
                 catch (Exception ex)
                 {
-                    // Log exception but don't fail - API will handle missing schedule
                     if (CronRadar.DebugLoggingEnabled)
-                    {
-                        Console.Error.WriteLine($"[CronRadar.Hangfire] Failed to get schedule for job '{recurringJobId}': {ex.Message}");
-                    }
+                        Console.Error.WriteLine($"[CronRadar.Hangfire] Cache populate error: {ex.Message}");
                 }
-                return null;
+
+                return _schedules.TryGetValue(key, out var schedule) ? schedule : null;
             }
         }
     }
