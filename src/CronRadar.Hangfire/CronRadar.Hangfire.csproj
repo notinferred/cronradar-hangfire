@@ -7,7 +7,7 @@
 
     <!-- Package Information -->
     <PackageId>CronRadar.Hangfire</PackageId>
-    <Version>0.0.9</Version>
+    <Version>0.0.10</Version>
     <Authors>CronRadar</Authors>
     <Company>CronRadar</Company>
     <Product>CronRadar Hangfire Extension</Product>
@@ -28,17 +28,14 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Depends on base CronRadar SDK -->
-    <PackageReference Include="CronRadar" Version="0.0.2" />
+    <!-- Depends on base CronRadar SDK - use project reference for local development -->
+    <PackageReference Include="CronRadar" Version="0.0.3" />
 
     <!-- Hangfire dependency (peer dependency - user should have this already) -->
     <PackageReference Include="Hangfire.Core" Version="1.7.0" />
 
-    <!-- For dependency injection support -->
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="2.1.0" />
-
-    <!-- For JSON serialization support -->
-    <PackageReference Include="System.Text.Json" Version="4.7.2" Condition="'$(TargetFramework)' == 'netstandard2.0'" />
+    <!-- For dependency injection support - updated version to avoid conflicts -->
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="6.0.0" />
   </ItemGroup>
 
   <ItemGroup>
