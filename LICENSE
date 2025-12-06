@@ -1,0 +1,41 @@
+CronRadar SDK License
+
+Copyright (c) 2025 CronRadar. All rights reserved.
+
+## Permitted Use
+
+You may use this software solely in connection with the CronRadar monitoring
+service available at cronradar.com. You may view, study, and modify the source
+code for the purpose of fixing bugs or improving functionality.
+
+## Contributions
+
+If you modify this software to fix bugs or add improvements, you may submit
+those modifications back to CronRadar via pull request. By submitting, you
+grant CronRadar a perpetual, worldwide, non-exclusive, royalty-free license
+to use, modify, and distribute your contributions under any terms.
+
+## Restrictions
+
+You may NOT:
+- Use this software with any service other than CronRadar
+- Fork or use this software for your own projects or products
+- Redistribute this software (use official package managers only)
+- Create derivative works for purposes other than contributing back to CronRadar
+- Remove or modify any license, copyright, or attribution notices
+- Use this software to create a competing monitoring service
+
+## Termination
+
+Your license terminates immediately if you violate any restriction. Upon
+termination, you must stop using the software.
+
+## Disclaimer
+
+THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED. IN NO EVENT SHALL CRONRADAR BE LIABLE FOR ANY DAMAGES ARISING FROM
+THE USE OF THIS SOFTWARE.
+
+## Questions
+
+For licensing questions: support@cronradar.com
