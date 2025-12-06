@@ -19,10 +19,6 @@ namespace CronRadar.Hangfire
             Timeout = TimeSpan.FromSeconds(10)
         };
 
-        // Track which monitors have been synced (per-monitor idempotency)
-        private static readonly HashSet<string> _syncedMonitors = new HashSet<string>();
-        private static readonly object _syncLock = new object();
-
         private readonly string _apiKey;
 
         public CronRadarMonitorSync(string apiKey = null)
@@ -47,16 +43,6 @@ namespace CronRadar.Hangfire
 
             // Normalize the key
             var normalizedKey = CronRadarKeyNormalizer.Normalize(recurringJobId);
-
-            // Check if already synced (per-monitor idempotency)
-            lock (_syncLock)
-            {
-                if (!_syncedMonitors.Add(normalizedKey))
-                {
-                    // Already synced this monitor
-                    return true;
-                }
-            }
 
             try
             {
@@ -97,35 +83,36 @@ namespace CronRadar.Hangfire
                 else
                 {
                     Console.WriteLine($"[CronRadar] Failed to sync monitor '{normalizedKey}': {response.StatusCode}");
-
-                    // Remove from synced set to allow retry
-                    lock (_syncLock)
-                    {
-                        _syncedMonitors.Remove(normalizedKey);
-                    }
                     return false;
                 }
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"[CronRadar] Error syncing monitor '{normalizedKey}': {ex.Message}");
-
-                // Remove from synced set to allow retry
-                lock (_syncLock)
-                {
-                    _syncedMonitors.Remove(normalizedKey);
-                }
                 return false;
             }
         }
 
         /// <summary>
         /// Sync a single monitor synchronously (for use in decorator pattern)
+        /// Returns true if sync succeeded
         /// </summary>
-        public void SyncSingleMonitor(string recurringJobId, string cronExpression, string jobName = null)
+        public bool SyncSingleMonitor(string recurringJobId, string cronExpression, string jobName = null)
         {
-            // Fire and forget - don't block job registration
-            Task.Run(() => SyncSingleMonitorAsync(recurringJobId, cronExpression, jobName));
+            try
+            {
+                // Use synchronous wait with timeout to avoid deadlocks
+                var task = SyncSingleMonitorAsync(recurringJobId, cronExpression, jobName);
+                if (task.Wait(TimeSpan.FromSeconds(5)))
+                {
+                    return task.Result;
+                }
+                return false;
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         /// <summary>
@@ -144,15 +131,5 @@ namespace CronRadar.Hangfire
                     : word));
         }
 
-        /// <summary>
-        /// Clear synced monitors cache (useful for testing)
-        /// </summary>
-        public static void ClearSyncedMonitors()
-        {
-            lock (_syncLock)
-            {
-                _syncedMonitors.Clear();
-            }
-        }
     }
 }
