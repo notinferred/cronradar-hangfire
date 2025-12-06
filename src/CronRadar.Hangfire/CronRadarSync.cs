@@ -112,7 +112,7 @@ namespace CronRadar.Hangfire
                 var content = new StringContent(json, Encoding.UTF8, "application/json");
 
                 // Make sync request (application ID is extracted from API key on server)
-                var request = new HttpRequestMessage(HttpMethod.Post, $"{baseUrl}/api/extensions/sync");
+                var request = new HttpRequestMessage(HttpMethod.Post, $"{baseUrl}/api/sync");
                 request.Headers.TryAddWithoutValidation("Authorization", $"Basic {Convert.ToBase64String(Encoding.UTF8.GetBytes($"{apiKey}:"))}");
                 request.Content = content;
 
@@ -181,7 +181,7 @@ namespace CronRadar.Hangfire
                 var content = new StringContent(json, Encoding.UTF8, "application/json");
 
                 // Make sync request (application ID is extracted from API key on server)
-                var request = new HttpRequestMessage(HttpMethod.Post, $"{baseUrl}/api/extensions/sync");
+                var request = new HttpRequestMessage(HttpMethod.Post, $"{baseUrl}/api/sync");
                 request.Headers.TryAddWithoutValidation("Authorization", $"Basic {Convert.ToBase64String(Encoding.UTF8.GetBytes($"{apiKey}:"))}");
                 request.Content = content;
 
@@ -217,13 +217,23 @@ namespace CronRadar.Hangfire
 
             try
             {
-                // Note: Hangfire doesn't provide a simple way to enumerate recurring jobs
-                // In production, you would typically track these when you create them
-                // For now, we'll return an empty list and rely on manual monitor creation
-                // or tracking jobs as they're created
+                using (var connection = JobStorage.Current.GetConnection())
+                {
+                    var recurringJobs = connection.GetRecurringJobs();
 
-                Console.WriteLine("[CronRadar.Hangfire] Note: Auto-discovery of existing recurring jobs is not implemented.");
-                Console.WriteLine("[CronRadar.Hangfire] Please create monitors manually or use the sync API when creating new jobs.");
+                    foreach (var job in recurringJobs)
+                    {
+                        monitors.Add(new
+                        {
+                            key = job.Id, // Use the job ID as-is (e.g., "check-overdue-pings")
+                            name = GenerateReadableName(job.Id),
+                            schedule = job.Cron,
+                            gracePeriod = 60 // Default grace period
+                        });
+                    }
+
+                    Console.WriteLine($"[CronRadar.Hangfire] Discovered {monitors.Count} recurring jobs for sync");
+                }
             }
             catch (Exception ex)
             {
@@ -231,6 +241,22 @@ namespace CronRadar.Hangfire
             }
 
             return monitors;
+        }
+
+        /// <summary>
+        /// Generate a human-readable name from a kebab-case job ID
+        /// </summary>
+        private static string GenerateReadableName(string jobId)
+        {
+            if (string.IsNullOrEmpty(jobId))
+                return jobId;
+
+            // Convert kebab-case to title case
+            // "check-overdue-pings" -> "Check Overdue Pings"
+            return string.Join(" ", jobId.Split('-')
+                .Select(word => word.Length > 0
+                    ? char.ToUpper(word[0]) + word.Substring(1).ToLower()
+                    : word));
         }
 
 
@@ -256,30 +282,17 @@ namespace CronRadar.Hangfire
         /// <summary>
         /// Configure CronRadar with automatic job syncing
         /// Application ID is extracted from the API key (ck_app_{appId}_{secret})
+        /// NOTE: This method is now deprecated. Use UseCronRadar() which includes auto-sync by default.
         /// </summary>
+        [Obsolete("Use UseCronRadar() instead - it now includes auto-sync by default")]
         public static IGlobalConfiguration UseCronRadarWithSync(
             this IGlobalConfiguration configuration,
             string apiKey = null,
             bool syncOnStartup = true,
             bool removeStale = true)
         {
-            // Add the monitoring filter
-            configuration.UseCronRadar(apiKey);
-
-            // Sync recurring jobs on startup if requested
-            if (syncOnStartup)
-            {
-                Task.Run(async () =>
-                {
-                    // Wait a bit for Hangfire to fully initialize
-                    await Task.Delay(5000);
-
-                    // Sync all recurring jobs
-                    await CronRadarSync.SyncRecurringJobsAsync(apiKey, removeStale);
-                });
-            }
-
-            return configuration;
+            // Just call the main UseCronRadar method which now includes auto-sync
+            return configuration.UseCronRadar(apiKey, autoSync: syncOnStartup);
         }
     }
 }
