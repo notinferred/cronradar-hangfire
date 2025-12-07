@@ -7,10 +7,10 @@
 
     <!-- Package Information -->
     <PackageId>CronRadar.Hangfire</PackageId>
-    <Version>0.0.10</Version>
+    <Version>0.0.11</Version>
     <Authors>Administrator</Authors>
     <Company>CronRadar</Company>
-    <PackageLicenseExpression>LicenseRef-Proprietary</PackageLicenseExpression>
+    <PackageLicenseFile>LICENSE</PackageLicenseFile>
     <Product>CronRadar Hangfire Extension</Product>
     <Description>Automatic monitoring for Hangfire background jobs. Track job execution, detect failures, and get alerts with zero configuration. Simply add UseCronRadar() to your Hangfire setup.</Description>
     <Copyright>Copyright © CronRadar 2025</Copyright>
@@ -29,8 +29,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Depends on base CronRadar SDK - use project reference for local development -->
-    <PackageReference Include="CronRadar" Version="0.0.3" />
+    <!-- Depends on base CronRadar SDK -->
+    <PackageReference Include="CronRadar" Version="0.0.4" />
 
     <!-- Hangfire dependency (peer dependency - user should have this already) -->
     <PackageReference Include="Hangfire.Core" Version="1.7.0" />
@@ -41,6 +41,7 @@
 
   <ItemGroup>
     <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+    <None Include="..\..\LICENSE" Pack="true" PackagePath="\" />
   </ItemGroup>
 
 </Project>

@@ -1,6 +1,6 @@
-# CronRadar.Hangfire
+# CronRadar for Hangfire
 
-Automatically monitors ALL your Hangfire jobs. Get alerts when jobs fail or don't run on schedule.
+Monitor Hangfire recurring jobs automatically.
 
 ## Installation
 
@@ -8,40 +8,66 @@ Automatically monitors ALL your Hangfire jobs. Get alerts when jobs fail or don'
 dotnet add package CronRadar.Hangfire
 ```
 
-## Setup
+[NuGet](https://nuget.org/packages/CronRadar.Hangfire)
 
-Add one line to your Hangfire configuration:
+## Quick Start - Selective Mode
+
+Monitor specific jobs with `[Monitor]` attribute:
 
 ```csharp
-services.AddHangfire(configuration => configuration
-    .UsePostgreSqlStorage(connectionString)
-    .UseCronRadar()); // Monitors ALL jobs automatically
+services.AddHangfire(config =>
+    config.Monitor()
+);
+
+[Monitor]
+public void DailyBackup()
+{
+    // Backup logic
+}
+
+public void InternalTask()
+{
+    // Not monitored (no attribute)
+}
 ```
 
-That's it. Every Hangfire job now pings CronRadar on successful completion.
+## Quick Start - Monitor All
+
+Monitor all jobs by default:
+
+```csharp
+services.AddHangfire(config =>
+    config.MonitorAll()
+);
+
+public void DailyBackup()
+{
+    // Monitored automatically
+}
+
+[SkipMonitor]
+public void InternalTask()
+{
+    // Opted out
+}
+```
 
 ## Configuration
 
-Set your API key:
+Set environment variable:
 ```bash
-export CRONRADAR_API_KEY=ck_app_xxxxx_yyyyy
+export CRONRADAR_API_KEY=ck_app_YOUR_KEY
 ```
 
+## Links
 
-## Custom Keys (Optional)
-
-Want a specific monitor key? Use the attribute:
-
-```csharp
-[CronRadar("critical-backup")]
-public void BackupDatabase() { }
-```
-
-## Requirements
-
-- Hangfire 1.7.0+
-- .NET 6.0+ or .NET Standard 2.0+
+- 📦 [NuGet](https://nuget.org/packages/CronRadar.Hangfire)
+- 🐛 [GitHub Issues](https://github.com/cronradar/cronradar/issues)
+- 📚 [Documentation](https://cronradar.com/docs/sdks/hangfire)
+- ✉️ support@cronradar.com
 
 ## License
 
 Proprietary - © 2025 CronRadar. All rights reserved.
+
+See [LICENSE](./LICENSE) for details. This SDK may only be used with the CronRadar monitoring service.
