@@ -7,7 +7,7 @@
 
     <!-- Package Information -->
     <PackageId>CronRadar.Hangfire</PackageId>
-    <Version>0.0.12</Version>
+    <Version>0.0.13</Version>
     <Authors>Administrator</Authors>
     <Company>CronRadar</Company>
     <PackageLicenseFile>LICENSE</PackageLicenseFile>
@@ -30,7 +30,7 @@
 
   <ItemGroup>
     <!-- Depends on base CronRadar SDK -->
-    <PackageReference Include="CronRadar" Version="0.0.5" />
+    <PackageReference Include="CronRadar" Version="0.0.6" />
 
     <!-- Hangfire dependency (peer dependency - user should have this already) -->
     <PackageReference Include="Hangfire.Core" Version="1.7.0" />
