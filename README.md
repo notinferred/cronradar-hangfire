@@ -60,6 +60,13 @@ CRONRADAR_DEBUG=true
 3. Tracks start/complete/fail for every run
 4. Never breaks your jobs (all exceptions caught)
 
+## Links
+
+- [Documentation](https://docs.cronradar.com)
+- [NuGet](https://www.nuget.org/packages/CronRadar.Hangfire)
+
+**See also:** [CronRadar .NET SDK](https://www.nuget.org/packages/CronRadar)
+
 ## License
 
-Proprietary - © 2025 CronRadar. All rights reserved.
+© 2025 [CronRadar](https://cronradar.com) - See [LICENSE](./LICENSE)
