@@ -1,3 +1,4 @@
+using System;
 using Hangfire.Common;
 using Hangfire.Server;
 
@@ -5,11 +6,14 @@ namespace CronRadar.Hangfire
 {
     /// <summary>
     /// Add [CronRadar("monitor-key")] to any Hangfire job to monitor it with CronRadar.
+    /// DEPRECATED: Use MonitorAll() extension instead for automatic monitoring of all jobs.
+    /// This attribute is kept for backward compatibility only.
     /// </summary>
+    [Obsolete("Use MonitorAll() extension method for automatic monitoring. This attribute will be removed in a future version.", false)]
     public class CronRadarAttribute : JobFilterAttribute, IServerFilter
     {
         private readonly string _monitorKey;
-        private readonly string _apiKey;
+        private readonly string? _apiKey;
 
         /// <summary>
         /// Creates a new CronRadar monitoring attribute.
@@ -32,19 +36,8 @@ namespace CronRadar.Hangfire
             // Only monitor on successful completion
             if (context?.Exception == null && !context.Canceled)
             {
-                // Store API key if provided for this specific monitor
-                if (!string.IsNullOrEmpty(_apiKey))
-                {
-                    var currentKey = System.Environment.GetEnvironmentVariable("CRONRADAR_API_KEY");
-                    System.Environment.SetEnvironmentVariable("CRONRADAR_API_KEY", _apiKey, System.EnvironmentVariableTarget.Process);
-                    CronRadar.Monitor(_monitorKey);
-                    // Restore original key
-                    System.Environment.SetEnvironmentVariable("CRONRADAR_API_KEY", currentKey, System.EnvironmentVariableTarget.Process);
-                }
-                else
-                {
-                    CronRadar.Monitor(_monitorKey);
-                }
+                // Pass API key directly to Monitor - no environment variable mutation needed
+                CronRadar.Monitor(_monitorKey, schedule: null, apiKey: _apiKey);
             }
         }
     }
