@@ -31,7 +31,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\cronradar-dotnet\src\CronRadar\CronRadar.csproj" />
+    <PackageReference Include="CronRadar" Version="0.0.12" />
     <PackageReference Include="Hangfire.Core" Version="1.7.0" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="6.0.0" />
   </ItemGroup>
