@@ -20,32 +20,49 @@ namespace CronRadar.Hangfire
         private static string? _apiKey = null;
         private static readonly ConcurrentDictionary<string, string?> _schedules = new();
 
+        /// <summary>API key captured during initialization, used by the reconciler.</summary>
+        internal static string? ApiKey => _apiKey;
+
         /// <summary>
-        /// Enables monitoring for all jobs - only jobs with [SkipMonitor] attribute are excluded.
-        /// Leverages API's auto-registration - no background workers or complex sync logic needed.
+        /// Registers the execution filter (start/complete/fail telemetry) exactly once
+        /// and captures the API key. Shared by MonitorAll and AddCronRadarHangfire.
         /// </summary>
-        /// <param name="configuration">Hangfire global configuration</param>
-        /// <param name="apiKey">Optional API key (defaults to CRONRADAR_API_KEY env var)</param>
-        public static IGlobalConfiguration MonitorAll(this IGlobalConfiguration configuration, string? apiKey = null)
+        internal static void EnsureExecutionFilter(string? apiKey)
         {
             lock (_initLock)
             {
+                if (apiKey != null)
+                {
+                    _apiKey = apiKey; // Store for filter/reconciler (avoids env-var mutation)
+                }
+
                 if (_initialized)
                 {
-                    Console.WriteLine("[CronRadar.Hangfire] Already initialized. Ignoring duplicate call.");
-                    return configuration;
+                    return;
                 }
 
                 _initialized = true;
-                _apiKey = apiKey; // Store API key for filter to use (avoids environment variable mutation)
 
-                Console.WriteLine("[CronRadar.Hangfire] Initializing MonitorAll mode - use [SkipMonitor] to opt-out");
-
-                // Add single execution filter - handles lifecycle tracking + auto-registration on first ping
+                // Add single execution filter - handles lifecycle tracking (start/complete/fail)
                 GlobalJobFilters.Filters.Add(new CronRadarExecutionFilter());
-
-                return configuration;
             }
+        }
+
+        /// <summary>
+        /// Adds execution telemetry for all jobs (start/complete/fail); jobs with
+        /// [SkipMonitor] are excluded. This does NOT pre-register monitors at startup —
+        /// for dead-man coverage of jobs that have not run yet, use
+        /// <c>services.AddCronRadarHangfire(apiKey)</c> which also reconciles the schedule.
+        /// </summary>
+        /// <param name="configuration">Hangfire global configuration</param>
+        /// <param name="apiKey">Optional API key (defaults to CRONRADAR_API_KEY env var)</param>
+        [Obsolete("Use services.AddCronRadarHangfire(apiKey) for startup + periodic reconcile (dead-man coverage). MonitorAll only wires execution telemetry.")]
+        public static IGlobalConfiguration MonitorAll(this IGlobalConfiguration configuration, string? apiKey = null)
+        {
+            Console.WriteLine("[CronRadar.Hangfire] MonitorAll registers execution telemetry only. " +
+                "For startup dead-man coverage, use services.AddCronRadarHangfire(apiKey).");
+            EnsureExecutionFilter(apiKey);
+            return configuration;
         }
 
         /// <summary>
