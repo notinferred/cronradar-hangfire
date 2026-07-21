@@ -69,4 +69,4 @@ CRONRADAR_DEBUG=true
 
 ## License
 
-© 2025 [CronRadar](https://cronradar.com) - See [LICENSE](./LICENSE)
+© 2026 [CronRadar](https://cronradar.com) - See [LICENSE](./LICENSE)
