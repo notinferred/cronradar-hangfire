@@ -121,7 +121,8 @@ namespace CronRadar.Hangfire
                         var schedule = GetJobSchedule(connection, recurringJobId);
 
                         // Signal job start - API will auto-register if monitor doesn't exist (self-healing)
-                        CronRadar.StartJob(monitorKey, schedule, _apiKey);
+                        var attempt = context.GetJobParameter<int>("RetryCount");
+                        CronRadar.StartJob(monitorKey, schedule, _apiKey, context.BackgroundJob.Id, attempt);
                     }
                 }
                 catch (Exception ex)
@@ -163,7 +164,8 @@ namespace CronRadar.Hangfire
                         // Hangfire's concern and do not create false CronRadar incidents.
                         if (context.Exception == null && !context.Canceled)
                         {
-                            CronRadar.CompleteJob(monitorKey, _apiKey);
+                            var attempt = context.GetJobParameter<int>("RetryCount");
+                            CronRadar.CompleteJob(monitorKey, _apiKey, context.BackgroundJob.Id, attempt);
                             _recurringExecutions.TryRemove(context.BackgroundJob.Id, out _);
                         }
                         else if (context.Canceled)
@@ -214,7 +216,8 @@ namespace CronRadar.Hangfire
                     CronRadar.FailJob(
                         CronRadarKeyNormalizer.Normalize(recurringJobId!),
                         failedState.Exception?.Message ?? failedState.Reason ?? "Hangfire job failed after retries were exhausted",
-                        _apiKey);
+                        _apiKey,
+                        backgroundJob.Id);
                     _recurringExecutions.TryRemove(backgroundJob.Id, out _);
                 }
                 catch (Exception ex)

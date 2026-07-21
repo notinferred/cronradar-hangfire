@@ -66,15 +66,18 @@ public class GoldenPathTests
 
         var recurringJobs = new RecurringJobManager(JobStorage.Current);
         recurringJobs.TriggerJob("send-daily-report");
-        await endpoint.WaitForAsync(request => request.Path.Contains("/start", StringComparison.Ordinal));
-        await endpoint.WaitForAsync(request => request.Path.EndsWith("/complete", StringComparison.Ordinal));
+        var start = await endpoint.WaitForAsync(request => request.Path.Contains("send-daily-report") && request.Path.Contains("/start?", StringComparison.Ordinal));
+        var complete = await endpoint.WaitForAsync(request => request.Path.Contains("send-daily-report") && request.Path.Contains("/complete?", StringComparison.Ordinal));
+        Assert.Equal(QueryValue(start.Path, "run_id"), QueryValue(complete.Path, "run_id"));
+        Assert.False(string.IsNullOrWhiteSpace(QueryValue(start.Path, "run_id")));
 
         Assert.Equal(1, ExampleJobs.Executions);
 
         recurringJobs.TriggerJob("retry-safe-report");
-        await endpoint.WaitForAsync(request => request.Path.Contains("retry-safe-report") && request.Path.EndsWith("/complete"));
+        var retryComplete = await endpoint.WaitForAsync(request => request.Path.Contains("retry-safe-report") && request.Path.Contains("/complete?"));
         Assert.Equal(2, ExampleJobs.RetryAttempts);
         Assert.False(endpoint.Any(request => request.Path.Contains("retry-safe-report") && request.Path.Contains("/fail")));
+        Assert.Equal("1", QueryValue(retryComplete.Path, "attempt"));
 
         recurringJobs.TriggerJob("terminal-failure");
         await endpoint.WaitForAsync(request => request.Path.Contains("terminal-failure") && request.Path.Contains("/fail"));
@@ -96,6 +99,16 @@ public class GoldenPathTests
             await Task.Delay(25, timeout.Token);
         }
         throw new TimeoutException($"Hangfire job {backgroundJobId} did not reach {expectedState}.");
+    }
+
+    private static string? QueryValue(string path, string key)
+    {
+        var query = new Uri("http://localhost" + path).Query.TrimStart('?');
+        return query.Split('&', StringSplitOptions.RemoveEmptyEntries)
+            .Select(part => part.Split('=', 2))
+            .Where(parts => parts.Length == 2 && parts[0] == key)
+            .Select(parts => Uri.UnescapeDataString(parts[1]))
+            .FirstOrDefault();
     }
 
     public sealed class ExampleJobs

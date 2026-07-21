@@ -110,6 +110,7 @@ CronRadar observes Hangfire; it does not change Hangfire behavior.
 - Monitoring HTTP calls time out after five seconds by default.
 - A user-job exception is still reported to Hangfire and follows the application's normal retry policy.
 - Intermediate failed attempts do not open a CronRadar incident; only Hangfire's final `Failed` state is reported.
+- Lifecycle events carry the Hangfire background-job ID and retry count, so concurrent recurring executions and retries remain distinct in run history.
 - When debug logging is enabled, caught monitoring errors are written to standard error.
 
 ## Troubleshooting
