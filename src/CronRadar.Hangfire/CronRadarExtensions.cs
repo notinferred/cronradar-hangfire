@@ -97,6 +97,7 @@ namespace CronRadar.Hangfire
 
                 var method = context.BackgroundJob.Job?.Method;
                 if (method == null || !ShouldMonitorJob(method)) return;
+                CronRadarOutcome.Begin(context);
 
                 try
                 {
@@ -165,14 +166,19 @@ namespace CronRadar.Hangfire
                         if (context.Exception == null && !context.Canceled)
                         {
                             var attempt = context.GetJobParameter<int>("RetryCount");
-                            CronRadar.CompleteJob(monitorKey, _apiKey, context.BackgroundJob.Id, attempt);
+                            CronRadar.CompleteJob(monitorKey, _apiKey, context.BackgroundJob.Id, attempt, CronRadarOutcome.End(context));
                             _recurringExecutions.TryRemove(context.BackgroundJob.Id, out _);
                         }
                         else if (context.Canceled)
                         {
+                            CronRadarOutcome.End(context);
                             // Hangfire may requeue cancellation during shutdown. Do
                             // not report a false failure and do not retain stale state.
                             _recurringExecutions.TryRemove(context.BackgroundJob.Id, out _);
+                        }
+                        else
+                        {
+                            CronRadarOutcome.End(context);
                         }
                     }
                 }

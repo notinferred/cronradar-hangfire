@@ -64,6 +64,21 @@ Lifecycle events are emitted by the global Hangfire server filter. No monitoring
 
 One-time background jobs are ignored because they have no recurring-job schedule. Use the base [`CronRadar`](https://www.nuget.org/packages/CronRadar) SDK for manually instrumented work.
 
+### Outcome checks
+
+Report up to five bounded numeric or boolean results from a recurring job. The execution filter attaches them to that job's existing completion event:
+
+```csharp
+public void ImportCustomers()
+{
+    var processed = customerImporter.Run();
+    CronRadarOutcome.Report("records_processed", processed);
+    CronRadarOutcome.Report("successful", true);
+}
+```
+
+Define expectations such as `records_processed >= 1` or `successful is true` in the automation settings. Do not report job arguments, payloads, database records, logs, secrets, or personal data. Invalid outcome calls are ignored and never change Hangfire job behavior.
+
 ## Reference
 
 ```csharp

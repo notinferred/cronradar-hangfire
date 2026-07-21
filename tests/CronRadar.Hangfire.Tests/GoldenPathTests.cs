@@ -70,6 +70,8 @@ public class GoldenPathTests
         var complete = await endpoint.WaitForAsync(request => request.Path.Contains("send-daily-report") && request.Path.Contains("/complete?", StringComparison.Ordinal));
         Assert.Equal(QueryValue(start.Path, "run_id"), QueryValue(complete.Path, "run_id"));
         Assert.False(string.IsNullOrWhiteSpace(QueryValue(start.Path, "run_id")));
+        Assert.Contains("records_processed", complete.Body);
+        Assert.Contains("42", complete.Body);
 
         Assert.Equal(1, ExampleJobs.Executions);
 
@@ -116,7 +118,12 @@ public class GoldenPathTests
         public static int Executions;
         public static int RetryAttempts;
 
-        public void SendDailyReport() => Interlocked.Increment(ref Executions);
+        public void SendDailyReport()
+        {
+            Interlocked.Increment(ref Executions);
+            CronRadarOutcome.Report("records_processed", 42);
+            CronRadarOutcome.Report("successful", true);
+        }
 
         [SkipMonitor]
         public void InternalMaintenance() => throw new InvalidOperationException("Must never run in this test");
