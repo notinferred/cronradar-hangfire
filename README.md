@@ -227,6 +227,7 @@ Create a separate CronRadar application and API key for production, staging, and
 ## Links
 
 - [CronRadar documentation](https://docs.cronradar.com/sdks)
+- [Ingestion OpenAPI contract](https://docs.cronradar.com/openapi.json)
 - [NuGet package](https://www.nuget.org/packages/CronRadar.Hangfire)
 - [Hangfire monitoring overview](https://cronradar.com/hangfire)
 - [Security and reliability](https://cronradar.com/security)
