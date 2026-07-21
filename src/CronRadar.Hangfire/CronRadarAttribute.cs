@@ -6,10 +6,10 @@ namespace CronRadar.Hangfire
 {
     /// <summary>
     /// Add [CronRadar("monitor-key")] to any Hangfire job to monitor it with CronRadar.
-    /// DEPRECATED: Use MonitorAll() extension instead for automatic monitoring of all jobs.
+    /// DEPRECATED: Use AddCronRadarHangfire() instead for automatic monitoring of all recurring jobs.
     /// This attribute is kept for backward compatibility only.
     /// </summary>
-    [Obsolete("Use MonitorAll() extension method for automatic monitoring. This attribute will be removed in a future version.", false)]
+    [Obsolete("Use services.AddCronRadarHangfire() for automatic discovery and lifecycle monitoring. This attribute will be removed in a future version.", false)]
     public class CronRadarAttribute : JobFilterAttribute, IServerFilter
     {
         private readonly string _monitorKey;

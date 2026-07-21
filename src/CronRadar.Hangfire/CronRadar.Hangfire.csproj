@@ -7,21 +7,21 @@
 
     <!-- Package Information -->
     <PackageId>CronRadar.Hangfire</PackageId>
-    <Version>0.1.0</Version>
-    <AssemblyVersion>0.1.0.0</AssemblyVersion>
-    <FileVersion>0.1.0.0</FileVersion>
-    <Authors>Administrator</Authors>
+    <Version>0.2.0</Version>
+    <AssemblyVersion>0.2.0.0</AssemblyVersion>
+    <FileVersion>0.2.0.0</FileVersion>
+    <Authors>CronRadar</Authors>
     <Company>CronRadar</Company>
     <PackageLicenseFile>LICENSE</PackageLicenseFile>
     <Product>CronRadar Hangfire Extension</Product>
-    <Description>Automatic monitoring for Hangfire background jobs. Track job execution, detect failures, and get alerts with zero configuration. Simply add UseCronRadar() to your Hangfire setup.</Description>
-    <Copyright>Copyright © CronRadar 2025</Copyright>
+    <Description>Automatic discovery, schedule synchronization, and lifecycle monitoring for Hangfire recurring jobs.</Description>
+    <Copyright>Copyright © CronRadar 2026</Copyright>
     <PackageProjectUrl>https://cronradar.com</PackageProjectUrl>
     <RepositoryUrl>https://github.com/cronradar/cronradar-hangfire</RepositoryUrl>
     <PackageTags>cronradar;hangfire;monitoring;background-jobs;scheduler;cron;job-monitoring;alerts;devops</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
-    <PackageReleaseNotes>Automatic monitoring for all Hangfire jobs. Just add UseCronRadar() to your configuration.</PackageReleaseNotes>
+    <PackageReleaseNotes>AddCronRadarHangfire provides startup and periodic discovery, final-attempt failure reporting, and safe removal reconciliation.</PackageReleaseNotes>
     <RepositoryType>git</RepositoryType>
 
     <!-- Build Configuration -->
@@ -32,7 +32,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\cronradar-dotnet\src\CronRadar\CronRadar.csproj" />
-    <PackageReference Include="Hangfire.Core" Version="1.7.0" />
+    <PackageReference Include="Hangfire.Core" Version="1.8.21" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="6.0.0" />
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="6.0.0" />
   </ItemGroup>

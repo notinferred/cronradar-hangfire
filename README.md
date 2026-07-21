@@ -60,7 +60,7 @@ Lifecycle events are emitted by the global Hangfire server filter. No monitoring
 
 - Before execution: `start`
 - Normal completion: `complete`
-- Hangfire exception: `fail` with a bounded message
+- Terminal Hangfire failure: `fail` with a bounded message, after automatic retries are exhausted
 
 One-time background jobs are ignored because they have no recurring-job schedule. Use the base [`CronRadar`](https://www.nuget.org/packages/CronRadar) SDK for manually instrumented work.
 
@@ -80,13 +80,14 @@ public static IServiceCollection AddCronRadarHangfire(
 
 `AddCronRadarHangfire()` returns the same `IServiceCollection` for chaining and does not throw for CronRadar network or synchronization failures.
 
+`[SkipMonitor]` is the supported per-method opt-out and never throws. `MonitorAll()` and `[CronRadar(...)]` remain obsolete compatibility APIs; do not use them in new installations. `CronRadarHangfireReconciler.Reconcile()` is public only so Hangfire's job activator can invoke the package's internal reconciliation job—application code should not call it directly.
+
 ## Configuration
 
 | Environment variable | Required | Default | Purpose |
 |---|---|---|---|
 | `CRONRADAR_API_KEY` | yes | — | Application API key if not passed directly. |
 | `CRONRADAR_BASE_URL` | no | `https://cron.life` | Override the ingestion endpoint. |
-| `CRONRADAR_TIMEOUT_MS` | no | `5000` | HTTP request timeout. |
 | `CRONRADAR_DEBUG` | no | `false` | Log monitoring requests and caught errors. |
 
 Pass a key directly only when your configuration system already protects it:
@@ -108,6 +109,7 @@ CronRadar observes Hangfire; it does not change Hangfire behavior.
 - Network failures, timeouts, API errors, and registry reconciliation errors are caught.
 - Monitoring HTTP calls time out after five seconds by default.
 - A user-job exception is still reported to Hangfire and follows the application's normal retry policy.
+- Intermediate failed attempts do not open a CronRadar incident; only Hangfire's final `Failed` state is reported.
 - When debug logging is enabled, caught monitoring errors are written to standard error.
 
 ## Troubleshooting
@@ -123,6 +125,14 @@ Only Hangfire recurring jobs are discovered. Confirm the job appears in Hangfire
 ### Schedules changed but the dashboard has not
 
 Wait for the next reconciliation interval or restart the host to trigger an immediate registry sync.
+
+### CronRadar reports 401 Unauthorized
+
+Confirm `CRONRADAR_API_KEY` is active and belongs to the intended CronRadar application. Use a separate application and key for each deployment environment so staging cannot update production monitors.
+
+### Reconciliation is rate-limited or CronRadar is unavailable
+
+Keep the default 15-minute reconciliation interval. The package writes bounded guidance to standard error, Hangfire continues normally, and the next reconciliation retries automatically.
 
 ### Jobs still run during a CronRadar outage
 
@@ -205,10 +215,14 @@ Run the old and new deployment through one normal recurring-job execution, confi
 - Startup reconciliation declares the authoritative set of current Hangfire recurring jobs.
 - Periodic reconciliation catches jobs added after startup and schedule changes made while the host is running.
 - `[SkipMonitor]` jobs are omitted from the declared set and execution telemetry.
-- Removed jobs are no longer declared. The CronRadar service uses extension drift handling to pause stale coverage rather than billing or alerting indefinitely.
+- A successful reconciliation is authoritative: removed jobs are paused immediately rather than billing or alerting indefinitely. Reappearing jobs resume automatically unless the customer paused them.
 - The package's own `cronradar:reconcile` recurring job is internal integration work and is not a customer automation.
 
 Reconciliation declares configuration only. Execution signals still come from the Hangfire server filter when a recurring job runs.
+
+## Deployment environments
+
+Create a separate CronRadar application and API key for production, staging, and development. Keep the recurring-job IDs stable within each environment and never reuse a production key in a non-production host. Environment isolation is an application boundary, so identical Hangfire job IDs remain independent.
 
 ## Links
 

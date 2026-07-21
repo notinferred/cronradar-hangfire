@@ -17,9 +17,10 @@ namespace CronRadar.Hangfire
     public class CronRadarHangfireReconciler
     {
         private const string Source = "hangfire";
-        private const string Version = "0.1.0";
+        private const string Version = "0.2.0";
 
         // Public so Hangfire's recurring job can invoke it via the job activator.
+        [SkipMonitor]
         public async Task Reconcile()
         {
             try
@@ -41,6 +42,7 @@ namespace CronRadar.Hangfire
                         monitors.Add(new MonitorDefinition
                         {
                             Key = CronRadarKeyNormalizer.Normalize(job.Id),
+                            Name = Humanize(job.Id),
                             Schedule = job.Cron
                         });
                     }
@@ -57,6 +59,13 @@ namespace CronRadar.Hangfire
                     Console.Error.WriteLine($"[CronRadar.Hangfire] Reconcile error: {ex.Message}");
                 }
             }
+        }
+
+        private static string Humanize(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value)) return value;
+            return System.Globalization.CultureInfo.InvariantCulture.TextInfo
+                .ToTitleCase(value.Replace('-', ' ').Replace('_', ' '));
         }
     }
 }

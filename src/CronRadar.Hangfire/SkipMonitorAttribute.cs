@@ -4,7 +4,7 @@ namespace CronRadar.Hangfire
 {
     /// <summary>
     /// Mark a Hangfire job to be excluded from CronRadar monitoring.
-    /// Used with monitorAll mode (.MonitorAll() setup).
+    /// Used with AddCronRadarHangfire() automatic discovery.
     /// </summary>
     [AttributeUsage(AttributeTargets.Method, AllowMultiple = false, Inherited = false)]
     public class SkipMonitorAttribute : Attribute
