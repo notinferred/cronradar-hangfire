@@ -3,7 +3,10 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using Hangfire;
+using Hangfire.Common;
 using Hangfire.MemoryStorage;
+using Hangfire.States;
+using Hangfire.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Xunit;
@@ -23,6 +26,7 @@ public class GoldenPathTests
     {
         ExampleJobs.Executions = 0;
         ExampleJobs.RetryAttempts = 0;
+        var jobCompletion = new JobCompletionSignal();
         await using var endpoint = await RecordingEndpoint.StartAsync();
         Environment.SetEnvironmentVariable("CRONRADAR_BASE_URL", endpoint.BaseUrl);
         Environment.SetEnvironmentVariable("CRONRADAR_API_KEY", "ck_app_test_environment_secret");
@@ -32,7 +36,9 @@ public class GoldenPathTests
         using var host = Host.CreateDefaultBuilder()
             .ConfigureServices(services =>
             {
-                services.AddHangfire(configuration => configuration.UseMemoryStorage());
+                services.AddHangfire(configuration => configuration
+                    .UseMemoryStorage()
+                    .UseFilter(jobCompletion));
                 services.AddHangfireServer(options => options.WorkerCount = 1);
                 services.AddCronRadarHangfire(reconcileIntervalMinutes: 15);
             })
@@ -58,7 +64,7 @@ public class GoldenPathTests
 
         await host.StartAsync();
 
-        var sync = await endpoint.WaitForAsync(request => request.Path == "/api/sync");
+        var sync = await endpoint.WaitForAsync(request => request.Path == "/api/v1/sync");
         Assert.Contains("send-daily-report", sync.Body);
         Assert.Contains("0 9 * * *", sync.Body);
         Assert.DoesNotContain("internal-maintenance", sync.Body);
@@ -85,22 +91,10 @@ public class GoldenPathTests
         await endpoint.WaitForAsync(request => request.Path.Contains("terminal-failure") && request.Path.Contains("/fail"));
 
         endpoint.StopAccepting();
-        var outageJobId = recurringJobs.TriggerJob("send-daily-report");
-        await WaitForJobStateAsync(outageJobId, "Succeeded");
+        recurringJobs.TriggerJob("send-daily-report");
+        await jobCompletion.SecondSendDailyReport;
         Assert.Equal(2, ExampleJobs.Executions);
         await host.StopAsync();
-    }
-
-    private static async Task WaitForJobStateAsync(string backgroundJobId, string expectedState)
-    {
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-        while (!timeout.IsCancellationRequested)
-        {
-            using var connection = JobStorage.Current.GetConnection();
-            if (connection.GetJobData(backgroundJobId)?.State == expectedState) return;
-            await Task.Delay(25, timeout.Token);
-        }
-        throw new TimeoutException($"Hangfire job {backgroundJobId} did not reach {expectedState}.");
     }
 
     private static string? QueryValue(string path, string key)
@@ -139,6 +133,27 @@ public class GoldenPathTests
         public void TerminalFailure() => throw new InvalidOperationException("terminal");
     }
 
+    private sealed class JobCompletionSignal : JobFilterAttribute, IApplyStateFilter
+    {
+        private readonly TaskCompletionSource _secondSendDailyReport = new(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        private int _sendDailyReportCompletions;
+
+        public Task SecondSendDailyReport => _secondSendDailyReport.Task;
+
+        public void OnStateApplied(ApplyStateContext context, IWriteOnlyTransaction transaction)
+        {
+            if (context.NewState.Name == SucceededState.StateName &&
+                context.BackgroundJob.Job.Method.Name == nameof(ExampleJobs.SendDailyReport) &&
+                Interlocked.Increment(ref _sendDailyReportCompletions) == 2)
+                _secondSendDailyReport.TrySetResult();
+        }
+
+        public void OnStateUnapplied(ApplyStateContext context, IWriteOnlyTransaction transaction)
+        {
+        }
+    }
+
     private sealed record RecordedRequest(string Path, string Body);
 
     private sealed class RecordingEndpoint : IAsyncDisposable
@@ -146,6 +161,7 @@ public class GoldenPathTests
         private readonly TcpListener _listener;
         private readonly CancellationTokenSource _stopping = new();
         private readonly ConcurrentQueue<RecordedRequest> _requests = new();
+        private readonly SemaphoreSlim _requestRecorded = new(0);
         private readonly Task _server;
 
         private RecordingEndpoint(TcpListener listener)
@@ -168,14 +184,20 @@ public class GoldenPathTests
         public async Task<RecordedRequest> WaitForAsync(Func<RecordedRequest, bool> predicate)
         {
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-            while (!timeout.IsCancellationRequested)
+            try
             {
-                var match = _requests.FirstOrDefault(predicate);
-                if (match != null) return match;
-                await Task.Delay(25, timeout.Token);
+                while (true)
+                {
+                    var match = _requests.FirstOrDefault(predicate);
+                    if (match != null) return match;
+                    await _requestRecorded.WaitAsync(timeout.Token);
+                }
             }
-            throw new TimeoutException("Expected CronRadar request was not received. Paths: " +
-                string.Join(", ", _requests.Select(request => request.Path)));
+            catch (OperationCanceledException) when (timeout.IsCancellationRequested)
+            {
+                throw new TimeoutException("Expected CronRadar request was not received. Paths: " +
+                    string.Join(", ", _requests.Select(request => request.Path)));
+            }
         }
 
         public bool Any(Func<RecordedRequest, bool> predicate) => _requests.Any(predicate);
@@ -212,6 +234,7 @@ public class GoldenPathTests
                     while (read < contentLength)
                         read += await reader.ReadAsync(buffer.AsMemory(read, contentLength - read), _stopping.Token);
                     _requests.Enqueue(new RecordedRequest(path, new string(buffer)));
+                    _requestRecorded.Release();
 
                     var response = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{}";
                     await stream.WriteAsync(Encoding.ASCII.GetBytes(response), _stopping.Token);
@@ -227,6 +250,7 @@ public class GoldenPathTests
         {
             StopAccepting();
             try { await _server; } catch (OperationCanceledException) { }
+            _requestRecorded.Dispose();
             _stopping.Dispose();
         }
     }
