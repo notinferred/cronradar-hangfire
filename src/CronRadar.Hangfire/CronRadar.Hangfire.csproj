@@ -7,21 +7,21 @@
 
     <!-- Package Information -->
     <PackageId>CronRadar.Hangfire</PackageId>
-    <Version>0.2.0</Version>
-    <AssemblyVersion>0.2.0.0</AssemblyVersion>
-    <FileVersion>0.2.0.0</FileVersion>
+    <Version>0.2.1</Version>
+    <AssemblyVersion>0.2.1.0</AssemblyVersion>
+    <FileVersion>0.2.1.0</FileVersion>
     <Authors>CronRadar</Authors>
     <Company>CronRadar</Company>
     <PackageLicenseFile>LICENSE</PackageLicenseFile>
     <Product>CronRadar Hangfire Extension</Product>
-    <Description>Automatic discovery, schedule synchronization, and lifecycle monitoring for Hangfire recurring jobs.</Description>
+    <Description>Detect missed, failed, stuck, and disappeared Hangfire recurring jobs with automatic registry discovery, schedule sync, and lifecycle tracking.</Description>
     <Copyright>Copyright © CronRadar 2026</Copyright>
-    <PackageProjectUrl>https://cronradar.com</PackageProjectUrl>
+    <PackageProjectUrl>https://cronradar.com/hangfire</PackageProjectUrl>
     <RepositoryUrl>https://github.com/cronradar/cronradar-hangfire</RepositoryUrl>
-    <PackageTags>cronradar;hangfire;monitoring;background-jobs;scheduler;cron;job-monitoring;alerts;devops</PackageTags>
+    <PackageTags>cronradar;hangfire;recurring-jobs;monitoring;missed-jobs;failed-jobs;stuck-jobs;scheduler;alerts</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
-    <PackageReleaseNotes>AddCronRadarHangfire provides startup and periodic discovery, final-attempt failure reporting, and safe removal reconciliation.</PackageReleaseNotes>
+    <PackageReleaseNotes>Clarifies recurring-job reliability coverage and package discovery metadata; runtime behavior is unchanged.</PackageReleaseNotes>
     <RepositoryType>git</RepositoryType>
 
     <!-- Build Configuration -->

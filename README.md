@@ -2,7 +2,7 @@
 
 [![NuGet](https://img.shields.io/nuget/v/CronRadar.Hangfire.svg)](https://www.nuget.org/packages/CronRadar.Hangfire/)
 
-Monitor Hangfire recurring jobs automatically: synchronize the recurring-job registry, record every execution lifecycle, and alert when a job fails or misses its schedule.
+Monitor Hangfire recurring jobs automatically: synchronize the recurring-job registry, record every execution lifecycle, and alert when a job is missed, fails after retries, starts without finishing, or disappears from the registry.
 
 ## Install
 
@@ -63,6 +63,17 @@ Lifecycle events are emitted by the global Hangfire server filter. No monitoring
 - Terminal Hangfire failure: `fail` with a bounded message, after automatic retries are exhausted
 
 One-time background jobs are ignored because they have no recurring-job schedule. Use the base [`CronRadar`](https://www.nuget.org/packages/CronRadar) SDK for manually instrumented work.
+
+### How the reliability signals map to Hangfire
+
+| Symptom | Evidence CronRadar expects | What to check first |
+|---|---|---|
+| Recurring job did not run | The synchronized schedule passes its grace period without a lifecycle event. | Hangfire Server heartbeat, recurring registration, queue, and application uptime. |
+| Job exhausted retries | Hangfire reaches its terminal `Failed` state and the filter reports `fail`. | Final exception and configured `AutomaticRetry` policy. |
+| Job started but never finished | A `start` arrives without a matching terminal event before the allowed runtime. | Worker shutdown, blocking I/O, cancellation, and the Hangfire processing state. |
+| Recurring job disappeared | A later authoritative registry reconciliation no longer contains the recurring-job ID. | Deployment registration code and intentional `RemoveIfExists` calls. |
+
+Keep the Hangfire dashboard for queue, server, retry, and job administration. CronRadar adds an independent schedule and lifecycle expectation; it does not replace Hangfire's operational UI.
 
 ### Outcome checks
 
@@ -242,7 +253,8 @@ Create a separate CronRadar application and API key for production, staging, and
 
 ## Links
 
-- [CronRadar documentation](https://docs.cronradar.com/sdks)
+- [Canonical Hangfire quickstart](https://docs.cronradar.com/integrations/hangfire)
+- [Hangfire missed, failed, and stuck job guide](https://cronradar.com/blog/hangfire-monitoring)
 - [Ingestion OpenAPI contract](https://docs.cronradar.com/openapi.json)
 - [NuGet package](https://www.nuget.org/packages/CronRadar.Hangfire)
 - [Hangfire monitoring overview](https://cronradar.com/hangfire)
