@@ -113,13 +113,14 @@ namespace CronRadar.Hangfire
                             return;
                         }
 
+                        // recurringJobId! below: checked by IsNullOrEmpty above, which netstandard2.0 does not annotate
                         var monitorKey = CronRadarKeyNormalizer.Normalize(recurringJobId!);
                         _recurringExecutions[context.BackgroundJob.Id] = recurringJobId!;
 
                         // Read the current schedule on every execution. Recurring-job
                         // schedules can change while a host is running; a permanent
                         // cache would recreate a deleted monitor with stale metadata.
-                        var schedule = GetJobSchedule(connection, recurringJobId);
+                        var schedule = GetJobSchedule(connection, recurringJobId!);
 
                         // Signal job start - API will auto-register if monitor doesn't exist (self-healing)
                         var attempt = context.GetJobParameter<int>("RetryCount");

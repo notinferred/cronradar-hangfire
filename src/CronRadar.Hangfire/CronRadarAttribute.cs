@@ -20,7 +20,7 @@ namespace CronRadar.Hangfire
         /// </summary>
         /// <param name="monitorKey">The unique key to identify this job in CronRadar</param>
         /// <param name="apiKey">Optional API key (defaults to CRONRADAR_API_KEY env var)</param>
-        public CronRadarAttribute(string monitorKey, string apiKey = null)
+        public CronRadarAttribute(string monitorKey, string? apiKey = null)
         {
             _monitorKey = monitorKey;
             _apiKey = apiKey;
@@ -34,7 +34,7 @@ namespace CronRadar.Hangfire
         public void OnPerformed(PerformedContext context)
         {
             // Only monitor on successful completion
-            if (context?.Exception == null && !context.Canceled)
+            if (context != null && context.Exception == null && !context.Canceled)
             {
                 // Pass API key directly to Monitor - no environment variable mutation needed
                 CronRadar.Monitor(_monitorKey, schedule: null, apiKey: _apiKey);
