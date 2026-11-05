@@ -262,4 +262,4 @@ Create a separate CronRadar application and API key for production, staging, and
 
 ## License
 
-© 2026 [CronRadar](https://cronradar.com) — see [LICENSE](./LICENSE).
+© 2026 [CronRadar](https://cronradar.com) · MIT — see [LICENSE](./LICENSE).
