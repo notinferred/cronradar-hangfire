@@ -17,7 +17,7 @@ namespace CronRadar.Hangfire
     public class CronRadarHangfireReconciler
     {
         private const string Source = "hangfire";
-        private const string Version = "0.2.0";
+        private const string Version = "0.2.1";
 
         // Public so Hangfire's recurring job can invoke it via the job activator.
         [SkipMonitor]
