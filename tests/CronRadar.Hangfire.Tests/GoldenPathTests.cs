@@ -61,6 +61,10 @@ public class GoldenPathTests
             "terminal-failure",
             jobs => jobs.TerminalFailure(),
             "0 11 * * *");
+        RecurringJob.AddOrUpdate<ExampleJobs>(
+            LongRecurringJobId,
+            jobs => jobs.LongIdReport(),
+            "0 12 * * *");
 
         await host.StartAsync();
 
@@ -69,6 +73,8 @@ public class GoldenPathTests
         Assert.Contains("0 9 * * *", sync.Body);
         Assert.DoesNotContain("internal-maintenance", sync.Body);
         Assert.DoesNotContain("cronradar:reconcile", sync.Body);
+        Assert.Contains($"\"{ShortenedLongKey}\"", sync.Body);
+        Assert.DoesNotContain(LongRecurringJobId, sync.Body);
 
         var recurringJobs = new RecurringJobManager(JobStorage.Current);
         recurringJobs.TriggerJob("send-daily-report");
@@ -90,12 +96,20 @@ public class GoldenPathTests
         recurringJobs.TriggerJob("terminal-failure");
         await endpoint.WaitForAsync(request => request.Path.Contains("terminal-failure") && request.Path.Contains("/fail"));
 
+        // A recurring-job ID over 100 characters reports under the same shortened key it was synced with.
+        recurringJobs.TriggerJob(LongRecurringJobId);
+        await endpoint.WaitForAsync(request => request.Path.StartsWith($"/api/v1/ping/{ShortenedLongKey}/", StringComparison.Ordinal) && request.Path.Contains("/complete?", StringComparison.Ordinal));
+
         endpoint.StopAccepting();
         recurringJobs.TriggerJob("send-daily-report");
         await jobCompletion.SecondSendDailyReport;
         Assert.Equal(2, ExampleJobs.Executions);
         await host.StopAsync();
     }
+
+    // Shared test vector from docs/SDK_SPECIFICATION.md "Monitor Keys".
+    private static readonly string LongRecurringJobId = string.Concat(Enumerable.Repeat("abcdef-", 15)) + "end";
+    private static readonly string ShortenedLongKey = string.Concat(Enumerable.Repeat("abcdef-", 12)) + "abcdef-4f91bd6e";
 
     private static string? QueryValue(string path, string key)
     {
@@ -131,6 +145,10 @@ public class GoldenPathTests
 
         [AutomaticRetry(Attempts = 0)]
         public void TerminalFailure() => throw new InvalidOperationException("terminal");
+
+        public void LongIdReport()
+        {
+        }
     }
 
     private sealed class JobCompletionSignal : JobFilterAttribute, IApplyStateFilter

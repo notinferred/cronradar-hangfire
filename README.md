@@ -62,6 +62,8 @@ Lifecycle events are emitted by the global Hangfire server filter. No monitoring
 - Normal completion: `complete`
 - Terminal Hangfire failure: `fail` with a bounded message, after automatic retries are exhausted
 
+Each monitor key is the recurring-job ID, lowercased with separators turned into hyphens. A key longer than 100 characters keeps its first 91 characters and ends with a hyphen and 8 hex characters of its SHA-256, so it stays stable and distinct.
+
 One-time background jobs are ignored because they have no recurring-job schedule. Use the base [`CronRadar`](https://www.nuget.org/packages/CronRadar) SDK for manually instrumented work.
 
 ### How the reliability signals map to Hangfire
