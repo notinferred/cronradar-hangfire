@@ -1,0 +1,47 @@
+name: Publish to NuGet
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to publish, such as v1.0.15
+        required: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write   # required for NuGet Trusted Publishing (OIDC)
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            9.0.x
+            10.0.x
+
+      - name: Check the tag matches the package version
+        run: |
+          tag="${{ inputs.tag || github.ref_name }}"
+          version="$(sed -n 's/.*<Version>\(.*\)<\/Version>.*/\1/p' src/CronRadar.Hangfire/CronRadar.Hangfire.csproj | head -1)"
+          test "v$version" = "$tag" || { echo "Tag $tag does not match version $version"; exit 1; }
+
+      - name: Pack
+        run: |
+          dotnet build src/CronRadar.Hangfire/CronRadar.Hangfire.csproj -c Release
+          dotnet pack src/CronRadar.Hangfire/CronRadar.Hangfire.csproj -c Release --no-build -o out
+
+      - uses: NuGet/login@v1
+        id: login
+        with:
+          user: ${{ vars.NUGET_USER }}
+
+      - name: Push
+        run: dotnet nuget push "out/*.nupkg" --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" --source https://api.nuget.org/v3/index.json --skip-duplicate
