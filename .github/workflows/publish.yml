@@ -7,8 +7,12 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing release tag to publish, such as v1.0.15
+        description: Existing release tag to publish, such as v0.2.2
         required: true
+
+env:
+  # The project references ../cronradar-dotnet, so CI checks the base SDK out beside it at this release.
+  CRONRADAR_BASE_TAG: v1.0.15
 
 jobs:
   publish:
@@ -16,10 +20,20 @@ jobs:
     permissions:
       id-token: write   # required for NuGet Trusted Publishing (OIDC)
       contents: read
+    defaults:
+      run:
+        working-directory: cronradar-hangfire
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.tag || github.ref }}
+          path: cronradar-hangfire
+
+      - uses: actions/checkout@v4
+        with:
+          repository: notinferred/cronradar-dotnet
+          ref: ${{ env.CRONRADAR_BASE_TAG }}
+          path: cronradar-dotnet
 
       - uses: actions/setup-dotnet@v4
         with:
@@ -44,4 +58,4 @@ jobs:
           user: ${{ vars.NUGET_USER }}
 
       - name: Push
-        run: dotnet nuget push "out/*.nupkg" --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" --source https://api.nuget.org/v3/index.json --skip-duplicate
+        run: dotnet nuget push "out/CronRadar.Hangfire.*.nupkg" --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" --source https://api.nuget.org/v3/index.json --skip-duplicate
